@@ -1,0 +1,5 @@
+.env
+Backend/.env
+*.json
+Backend/client_secret_*.json
+node_modules/
