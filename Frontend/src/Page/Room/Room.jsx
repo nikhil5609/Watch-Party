@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { joinRoom, setFile, setVideoState, verifyFile } from "../../Store/room.slice";
+import { joinRoom, setFile, setRoom, setVideoState, verifyFile } from "../../Store/room.slice";
 import {
   ShieldCheck,
   Film,
@@ -39,10 +39,10 @@ const Room = () => {
           return;
         }
         await dispatch(joinRoom(roomId))
-        .then((res)=>{
-          if(res.payload.success === false)
-          navigate('/');
-        })
+          .then((res) => {
+            if (res.payload.success === false)
+              navigate('/');
+          })
       }
       setCheckingRoom(false);
     };
@@ -53,9 +53,12 @@ const Room = () => {
   useEffect(() => {
     if (!room?.roomCode || !user?._id) return;
 
-    const handleRoomUsers = (data) => setPresentUser(data);
+    const handleRoomUsers = (data) => {
+      setPresentUser(data)
+    };
 
     socket.on("room-users", handleRoomUsers);
+
     socket.emit("join-room", {
       roomId: room.roomCode,
       userId: user._id,
@@ -69,16 +72,34 @@ const Room = () => {
       socket.off("room-users", handleRoomUsers);
     };
   }, [room?.roomCode, user?._id]);
+  /* --------------- ROOM UPDATE ---------------------*/
+  useEffect(() => {
+  if (!socket) return;
+
+  const handleRoomUpdated = (updatedRoom) => {
+    dispatch(setRoom(updatedRoom));
+  };
+
+  socket.on("room-updated", handleRoomUpdated);
+
+  return () => {
+    socket.off("room-updated", handleRoomUpdated);
+  };
+}, [socket, dispatch]);
 
   /* ---------------- ONLINE MEMBERS ---------------- */
   useEffect(() => {
     if (!room || !presentUser.length) return;
-
-    const online = room.members.filter(({ userId }) =>
-      presentUser.some((u) => u.userId === userId?._id)
+    const online = room.members.filter((member) =>
+      presentUser.some(
+        (u) => {
+         return String(u.userId) == String(member.userId?._id)
+        }
+      )
     );
     setOnlineMembers(online);
-  }, [room, presentUser]);
+  }, [presentUser, room]);
+
 
   if (checkingRoom || !room) return <Loading />;
 
@@ -110,10 +131,10 @@ const Room = () => {
         : "WAITING FOR FRIENDS"
       : "SETUP THE CINEMA"
     : hostHasSelectedVideo
-    ? iAmVerified
-      ? "WAITING FOR HOST"
-      : "VERIFY YOUR MOVIE FILE"
-    : "WAITING FOR HOST";
+      ? iAmVerified
+        ? "WAITING FOR HOST"
+        : "VERIFY YOUR MOVIE FILE"
+      : "WAITING FOR HOST";
 
   const subtitle = isHost
     ? hostHasSelectedVideo
@@ -122,10 +143,10 @@ const Room = () => {
         : "Friends are verifying the movie file. You can still change it."
       : "Select a local movie file to begin."
     : hostHasSelectedVideo
-    ? iAmVerified
-      ? "Sit tight, the host will start the movie."
-      : "Select the same movie file as the host."
-    : "The host has not selected a movie yet.";
+      ? iAmVerified
+        ? "Sit tight, the host will start the movie."
+        : "Select the same movie file as the host."
+      : "The host has not selected a movie yet.";
 
   /* ---------------- ACTIONS ---------------- */
   const handleCopyId = () => {
@@ -265,11 +286,10 @@ const Room = () => {
 
         <label
           className={`w-full max-w-md h-44 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center gap-4
-          ${
-            canSelectFile
+          ${canSelectFile
               ? "border-white/20 hover:border-red-500 hover:bg-red-500/5 cursor-pointer"
               : "opacity-30 cursor-not-allowed border-white/10"
-          }`}
+            }`}
         >
           <MonitorUp size={32} />
           <span className="text-sm font-medium">
@@ -312,19 +332,18 @@ const Room = () => {
           onClick={handleStartTheater}
           disabled={!isHost || !allVerified}
           className={`mt-8 w-full max-w-md py-5 rounded-2xl font-black tracking-widest
-          ${
-            isHost && allVerified
+          ${isHost && allVerified
               ? "bg-green-600 shadow-lg shadow-green-600/20"
               : "bg-slate-800 text-slate-500 cursor-not-allowed"
-          }`}
+            }`}
         >
           {isHost
             ? allVerified
               ? "READY TO PLAY"
               : "WAITING FOR FRIENDS"
             : iAmVerified
-            ? "WAITING FOR HOST"
-            : "VERIFY FILE"}
+              ? "WAITING FOR HOST"
+              : "VERIFY FILE"}
         </button>
       </main>
     </div>

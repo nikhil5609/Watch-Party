@@ -16,13 +16,13 @@ const joinRoom = (io, socket, { roomId, userId }) => {
   const alreadyJoined = roomUsers[roomId].some(
     (u) => u.userId === userId
   );
-
+  
   if (!alreadyJoined) {
     roomUsers[roomId].push({
       socketId: socket.id,
       userId,
     });
-
+    
   }
 
   socket.to(roomId).emit("user-joined", {

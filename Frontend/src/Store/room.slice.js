@@ -98,8 +98,9 @@ export const roomSlice = createSlice({
       state.loading = false;
       state.error = null;
     },
-
-    // 👇 THIS is where you save blob URL
+    setRoom: (state,action) => {
+      state.room = action.payload
+    },
     setVideoState: (state, action) => {
       state.video = action.payload;
     },
@@ -164,5 +165,5 @@ export const roomSlice = createSlice({
   },
 });
 
-export const { clearRoomState, setVideoState } = roomSlice.actions;
+export const { clearRoomState, setVideoState , setRoom} = roomSlice.actions;
 export default roomSlice.reducer;
