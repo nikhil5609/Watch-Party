@@ -84,6 +84,24 @@ export const verifyFile = createAsyncThunk(
   }
 );
 
+export const play = createAsyncThunk(
+  "room/play",
+  async (data, thunkAPI) => {
+    try {
+      const res = await axiosClient.post(
+        "/room/play",
+        data,
+        { withCredentials: true }
+      );
+      return res.data;
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data || error.message
+      );
+    }
+  }
+);
+
 /* =======================
    SLICE
 ======================= */
@@ -121,8 +139,6 @@ export const roomSlice = createSlice({
         state.loading = false;
         state.error = action.payload || "Failed to create room";
       })
-
-      // JOIN ROOM
       .addCase(joinRoom.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -135,8 +151,6 @@ export const roomSlice = createSlice({
         state.loading = false;
         state.error = action.payload || "Failed to join room";
       })
-
-      // BACKEND ONLY (no blob URL here)
       .addCase(setFile.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -159,6 +173,18 @@ export const roomSlice = createSlice({
         state.room = action.payload.room;
       })
       .addCase(verifyFile.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload || "Failed to verify video";
+      })
+      .addCase(play.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(play.fulfilled, (state, action) => {
+        state.loading = false;
+        state.room = action.payload.room;
+      })
+      .addCase(play.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || "Failed to verify video";
       });

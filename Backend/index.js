@@ -14,7 +14,7 @@ const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const morgan = require("morgan");
 
-const { joinRoom, leaveRoom } = require("./sockets/room.socket");
+const { joinRoom, leaveRoom, togglePlay, videoTimeStamp } = require("./sockets/room.socket");
 
 // ----------------- EXPRESS APP -----------------
 const app = express();
@@ -61,10 +61,19 @@ io.on("connection", (socket) => {
 
   socket.on("join-room", (data) => joinRoom(io, socket, data));
   socket.on("leave-room", (data) => leaveRoom(io, socket, data));
+  socket.on("toggle-play", (data) => togglePlay(io, socket, data));
+  socket.on("time-stamp",(data) => videoTimeStamp(io,socket,data))
+  socket.on("disconnect", (reason) => {
+    console.log("Socket Disconnected:", socket.id, reason);
 
-  socket.on("disconnect", () => {
-    leaveRoom(io, socket, {});
+    if (socket.roomId) {
+      leaveRoom(io, socket, {
+        roomId: socket.roomId,
+        userId: socket.userId,
+      });
+    }
   });
+
 });
 
 // ----------------- START SERVER -----------------

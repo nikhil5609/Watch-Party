@@ -5,8 +5,8 @@ import Home from './Page/Home/Home'
 import { useDispatch, useSelector } from "react-redux"
 import { verifyUser } from "./Store/user.slice"
 import Success from "./Page/Google/Success"
-import Room from "./Page/Room/Room"
-import Theater from "./Page/Theater/Theater"
+import RoomController from "./Page/Room/RoomController"
+import Theater from "./Page/Room/Theater"
 
 function App() {
   const dispatch = useDispatch();
@@ -20,8 +20,7 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="" element={<Home />} />
         <Route path="/success" element={<Success />} />
-        <Route path='/room' element={<Room />} />
-        <Route path="/room/:roomCode/theater" element={<Theater />} />
+        <Route path='/room' element={<RoomController />} />
       </Routes>
     </>
   )

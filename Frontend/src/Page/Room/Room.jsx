@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { joinRoom, setFile, setRoom, setVideoState, verifyFile } from "../../Store/room.slice";
+import { clearRoomState, joinRoom, play, setFile, setRoom, setVideoState, verifyFile } from "../../Store/room.slice";
 import {
   ShieldCheck,
   Film,
@@ -17,90 +17,15 @@ import Loading from "../Loading/Loading";
 import { socket } from "../../socket";
 import getFileHash from "../../Utility/hashFile";
 
-const Room = () => {
+const Room = ({member , checkingRoom}) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
   const { user } = useSelector((state) => state.user);
   const { room } = useSelector((state) => state.room);
-
-  const [presentUser, setPresentUser] = useState([]);
-  const [onlineMembers, setOnlineMembers] = useState([]);
-  const [checkingRoom, setCheckingRoom] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  /* ---------------- RESTORE ROOM ---------------- */
-  useEffect(() => {
-    const restoreRoom = async () => {
-      if (!room) {
-        const roomId = localStorage.getItem("roomId");
-        if (!roomId) {
-          navigate("/");
-          return;
-        }
-        await dispatch(joinRoom(roomId))
-          .then((res) => {
-            if (res.payload.success === false)
-              navigate('/');
-          })
-      }
-      setCheckingRoom(false);
-    };
-    restoreRoom();
-  }, [room, dispatch, navigate]);
-
-  /* ---------------- SOCKET PRESENCE ---------------- */
-  useEffect(() => {
-    if (!room?.roomCode || !user?._id) return;
-
-    const handleRoomUsers = (data) => {
-      setPresentUser(data)
-    };
-
-    socket.on("room-users", handleRoomUsers);
-
-    socket.emit("join-room", {
-      roomId: room.roomCode,
-      userId: user._id,
-    });
-
-    return () => {
-      socket.emit("leave-room", {
-        roomId: room.roomCode,
-        userId: user._id,
-      });
-      socket.off("room-users", handleRoomUsers);
-    };
-  }, [room?.roomCode, user?._id]);
-  /* --------------- ROOM UPDATE ---------------------*/
-  useEffect(() => {
-  if (!socket) return;
-
-  const handleRoomUpdated = (updatedRoom) => {
-    dispatch(setRoom(updatedRoom));
-  };
-
-  socket.on("room-updated", handleRoomUpdated);
-
-  return () => {
-    socket.off("room-updated", handleRoomUpdated);
-  };
-}, [socket, dispatch]);
-
-  /* ---------------- ONLINE MEMBERS ---------------- */
-  useEffect(() => {
-    if (!room || !presentUser.length) return;
-    const online = room.members.filter((member) =>
-      presentUser.some(
-        (u) => {
-         return String(u.userId) == String(member.userId?._id)
-        }
-      )
-    );
-    setOnlineMembers(online);
-  }, [presentUser, room]);
-
-
+  
   if (checkingRoom || !room) return <Loading />;
 
   /* ---------------- STATE HELPERS ---------------- */
@@ -161,8 +86,12 @@ const Room = () => {
       roomId: room.roomCode,
       userId: user._id,
     });
+    setTimeout(() => {
+      socket.disconnect();
+      navigate("/");
+    }, 100);
+    dispatch(clearRoomState());
     localStorage.removeItem("roomId");
-    navigate("/");
   };
 
   const handleFileSelect = async (e) => {
@@ -196,7 +125,7 @@ const Room = () => {
 
   const handleStartTheater = () => {
     if (!isHost || !allVerified) return;
-    navigate(`/room/${room.roomCode}/theater`);
+    dispatch(play({ roomId: room?.roomCode }))
   };
 
   /* ---------------- RENDER ---------------- */
@@ -228,7 +157,7 @@ const Room = () => {
           </h2>
 
           <div className="space-y-4">
-            {onlineMembers.map((p) => (
+            {member.map((p) => (
               <div key={p.userId._id} className="flex items-center gap-4">
                 <div className="relative">
                   <img

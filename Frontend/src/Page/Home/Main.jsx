@@ -4,7 +4,6 @@ import { logoutUser } from '../../Store/user.slice';
 import { useNavigate } from 'react-router-dom';
 import { createRoom, joinRoom } from '../../Store/room.slice';
 import { useEffect, useState } from 'react';
-import { socket } from '../../socket';
 
 const Main = () => {
   const dispatch = useDispatch();
@@ -13,28 +12,6 @@ const Main = () => {
   const [showJoinPopup, setShowJoinPopup] = useState(false);
   const [roomId, setRoomId] = useState('');
   const [error, setError] = useState('');
-
-  useEffect(() => {
-  const handleConnect = () => {
-    console.log("Connected to server:", socket.id);
-  };
-
-  const handleDisconnect = () => {
-    console.log("Disconnected from server");
-  };
-
-  socket.on("connect", handleConnect);
-  socket.on("disconnect", handleDisconnect);
-
-  if (socket.connected) {
-    handleConnect();
-  }
-
-  return () => {
-    socket.off("connect", handleConnect);
-    socket.off("disconnect", handleDisconnect);
-  };
-}, []);
 
   const handleLogout = () => {
     dispatch(logoutUser())
