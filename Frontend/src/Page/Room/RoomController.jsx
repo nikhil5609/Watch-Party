@@ -15,10 +15,7 @@ const RoomController = () => {
   const [checkingRoom, setCheckingRoom] = useState(true);
   const { room } = useSelector((state) => state.room);
   const { user } = useSelector((state) => state.user);
-  const location = useLocation();
-
   const joinedRef = useRef(false);
-
   const hasVideo = room?.video;
   const isReady = room?.status === "ready" || room?.status === "playing";
 
@@ -37,22 +34,6 @@ const RoomController = () => {
     }
   }, [room?.roomCode, user?._id]);
 
-  useEffect(() => {
-    const isRoomContext =
-      location.pathname.startsWith("/room") ||
-      location.pathname.startsWith("/theater");
-
-    if (!isRoomContext && joinedRef.current) {
-      socket.emit("leave-room", room?.hostId);
-      socket.disconnect();
-      dispatch(clearRoomState());
-      joinedRef.current = false;
-    }
-    // return () => {  // remove this return from here
-    //   socket.disconnect()
-    //   dispatch(clearRoomState());
-    // };
-  }, [location.pathname]);
 
   useEffect(() => {
     if (!room?.roomCode || !user?._id) return;

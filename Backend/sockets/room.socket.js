@@ -58,8 +58,6 @@ const leaveRoom = async (io, socket, currentHostId) => {
     (u) => u.socketId !== socket.id
   );
 
-  /* ---------- Host Reassignment ---------- */
-
   if (
     userId.toString() === currentHostId?.toString() &&
     roomUsers[roomId].length !== 0
@@ -104,7 +102,7 @@ const leaveRoom = async (io, socket, currentHostId) => {
       }
 
       delete roomDeleteTimers[roomId];
-    }, 100000);
+    }, 10000);
   }
 
   socket.roomId = null;

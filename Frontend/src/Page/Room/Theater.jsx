@@ -66,13 +66,13 @@ const Theater = ({ member }) => {
   // Host Heartbeat Time Stamp
   useEffect(() => {
     const interval = setInterval(() => {
-      if (isHost && videoRef.current && !videoRef.current.paused) {
+      if (videoRef.current && !videoRef.current.paused) {
         socket.emit("time-stamp", { roomId: room?.roomCode, time: videoRef.current.currentTime });
       }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [isHost, room?.roomCode]);
+  }, [room?.roomCode]);
 
   // Warning timer
   useEffect(() => {
@@ -116,7 +116,6 @@ const Theater = ({ member }) => {
     socket.on("control", handleVideoControl);
     return () => {
       socket.off("control", handleVideoControl);
-      socket.off("get-time", handleGetTime);
     };
   }, [video]);
 
