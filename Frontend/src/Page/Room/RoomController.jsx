@@ -24,8 +24,7 @@ const RoomController = () => {
 
   useUnloadWarning(hasVideo && isReady);
 
-
-  useEffect(() => {
+ useEffect(() => {
     if (!room?.roomCode || !user?._id) return;
 
     if (!joinedRef.current) {
@@ -36,10 +35,6 @@ const RoomController = () => {
       });
       joinedRef.current = true;
     }
-    return () => {
-      socket.disconnect()
-      dispatch(clearRoomState());
-    };
   }, [room?.roomCode, user?._id]);
 
   useEffect(() => {
@@ -48,14 +43,15 @@ const RoomController = () => {
       location.pathname.startsWith("/theater");
 
     if (!isRoomContext && joinedRef.current) {
-      socket.emit("leave-room", {
-        roomId: room.roomCode,
-        userId: user._id,
-      });
+      socket.emit("leave-room", room?.hostId);
       socket.disconnect();
       dispatch(clearRoomState());
       joinedRef.current = false;
     }
+    // return () => {  // remove this return from here
+    //   socket.disconnect()
+    //   dispatch(clearRoomState());
+    // };
   }, [location.pathname]);
 
   useEffect(() => {
@@ -64,7 +60,8 @@ const RoomController = () => {
       setPresentUser(data)
     };
     socket.on("room-users", handleRoomUsers);
-  }, [room?.roomCode, user?._id]);
+    return () => socket.off("room-users", handleRoomUsers);
+  }, [room?.roomCode , user?._id]);
 
   useEffect(() => {
     if (!socket) return;

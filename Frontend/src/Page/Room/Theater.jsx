@@ -25,14 +25,14 @@ const Theater = ({ member }) => {
   const [hoverControls, setHoverControls] = useState(false);
   const [showWarning, setShowWarning] = useState(true);
   const [isVerifying, setIsVerifying] = useState(false);
-  
+
   // Timeline State
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
 
   const isHost = user?._id === room?.hostId;
-  
+
   // Formatting time (00:00)
   const formatTime = (time) => {
     if (isNaN(time)) return "00:00";
@@ -91,7 +91,7 @@ const Theater = ({ member }) => {
         if (!document.fullscreenElement) containerRef.current?.requestFullscreen();
         else document.exitFullscreen();
       }
-      
+
       // Host specific keys
       if (isHost) {
         if (e.key === "ArrowRight") handleSkip(5);
@@ -183,26 +183,26 @@ const Theater = ({ member }) => {
     const drift = time - videoRef.current.currentTime;
     if (Math.abs(drift) > 0.5 && Math.abs(drift) < 2) {
       videoRef.current.playbackRate = drift > 0 ? 1.05 : 0.95;
-      setTimeout(() => { if(videoRef.current) videoRef.current.playbackRate = 1; }, 2000);
+      setTimeout(() => { if (videoRef.current) videoRef.current.playbackRate = 1; }, 2000);
     } else if (Math.abs(drift) >= 2) {
       videoRef.current.currentTime = time;
     }
     status === "play" ? videoRef.current.play() : videoRef.current.pause();
   };
 
-  useEffect(()=>{
-    setInterval(()=>{
+  useEffect(() => {
+    setInterval(() => {
       socket.on("get-time", handleGetTime);
-    },2000)
+    }, 2000)
     return () => socket.off("get-time".handleGetTime);
-  },[])
+  }, [])
 
   const leaveRoom = () => {
     if (!window.confirm("Leave the theater?")) return;
-    socket.emit("leave-room", { roomId: room.roomCode, userId: user._id });
+    socket.emit("leave-room", room?.hostId);
     socket.disconnect();
-    dispatch(clearRoomState());
     navigate("/");
+    dispatch(clearRoomState());
   };
 
   return (
@@ -271,11 +271,11 @@ const Theater = ({ member }) => {
 
             {/* PLAYER CONTROLS BOX */}
             <div className={`absolute bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 flex flex-col items-center gap-4 w-[90%] max-w-4xl px-8 py-5 bg-slate-900/80 backdrop-blur-3xl rounded-[2.5rem] border border-white/10 ${hoverControls ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"}`}>
-              
+
               {/* TIMELINE SECTION */}
               <div className="w-full flex items-center gap-4">
                 <span className="text-[10px] font-mono text-slate-400 w-12">{formatTime(currentTime)}</span>
-                <div 
+                <div
                   className={`relative h-1.5 flex-1 bg-white/10 rounded-full overflow-hidden ${isHost ? "cursor-pointer" : "cursor-not-allowed"}`}
                   onClick={handleSeek}
                 >
@@ -299,9 +299,9 @@ const Theater = ({ member }) => {
                     </button>
                   </>
                 )}
-                
+
                 <div className="h-8 w-[1px] bg-white/10 mx-2" />
-                
+
                 <button onClick={() => setMicOn(!micOn)} className={`p-3.5 rounded-2xl transition-all ${micOn ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"}`}>
                   {micOn ? <Mic size={20} /> : <MicOff size={20} />}
                 </button>
@@ -309,9 +309,9 @@ const Theater = ({ member }) => {
                   {speakerOn ? <Volume2 size={20} /> : <VolumeX size={20} />}
                 </button>
                 <button onClick={() => containerRef.current?.requestFullscreen()} className="p-3.5 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10"><Maximize size={20} /></button>
-                
+
                 <div className="h-8 w-[1px] bg-white/10 mx-2" />
-                
+
                 <button onClick={leaveRoom} className="p-3.5 bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-white rounded-2xl transition-all">
                   <LogOut size={20} />
                 </button>

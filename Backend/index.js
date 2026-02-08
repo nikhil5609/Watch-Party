@@ -64,8 +64,7 @@ io.on("connection", (socket) => {
   socket.on("toggle-play", (data) => togglePlay(io, socket, data));
   socket.on("time-stamp",(data) => videoTimeStamp(io,socket,data))
   socket.on("disconnect", (reason) => {
-    console.log("Socket Disconnected:", socket.id, reason);
-
+  console.log("Socket Disconnected:", socket.id, reason);
     if (socket.roomId) {
       leaveRoom(io, socket, {
         roomId: socket.roomId,

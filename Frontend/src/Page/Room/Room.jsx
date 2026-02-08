@@ -82,14 +82,9 @@ const Room = ({member , checkingRoom}) => {
 
   const handleLeaveRoom = () => {
     if (!window.confirm("Are you sure?")) return;
-    socket.emit("leave-room", {
-      roomId: room.roomCode,
-      userId: user._id,
-    });
-    setTimeout(() => {
-      socket.disconnect();
-      navigate("/");
-    }, 100);
+    socket.emit("leave-room", room?.hostId)
+    socket.disconnect();
+    navigate("/");
     dispatch(clearRoomState());
     localStorage.removeItem("roomId");
   };

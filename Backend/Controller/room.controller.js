@@ -2,7 +2,7 @@ const generateRoomCode = require("../Utils/generate.roomcode");
 const Room = require("../Model/room.model");
 
 const getPopulatedRoom = async (roomId) => {
-  return await Room.findById(roomId).populate(
+  return await Room.findOne({ roomCode: roomId }).populate(
     "members.userId",
     "_id username profilePicture"
   );
@@ -29,7 +29,7 @@ const createRoom = async (req, res) => {
       status: "waiting",
     });
 
-    const populatedRoom = await getPopulatedRoom(room._id);
+    const populatedRoom = await getPopulatedRoom(roomCode);
 
     return res.status(201).json({
       success: true,
@@ -54,29 +54,25 @@ const joinRoom = async (req, res) => {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const room = await Room.findOne({ roomCode: roomId });
-    if (!room) {
-      return res.status(404).json({ success: false, message: "Room not found" });
-    }
-
-    const userId = req.user._id.toString();
-
-    const alreadyMember = room.members.some(
-      (m) => m.userId.toString() === userId
+    await Room.updateOne(
+      {
+        roomCode: roomId,
+        "members.userId": { $ne: req.user._id }
+      },
+      {
+        $push: {
+          members: { userId: req.user._id, fileVerified: false }
+        }
+      }
     );
-    
-    if (!alreadyMember) {
-      room.members.push({ userId, fileVerified: false });
-      await room.save();
-    }
 
-    const populatedRoom = await getPopulatedRoom(room._id);
 
-    req.io.to(room.roomCode).emit("room-updated", populatedRoom);
+    const populatedRoom = await getPopulatedRoom(roomId);
+    req.io.to(populatedRoom?.roomCode).emit("room-updated", populatedRoom);
 
     return res.status(200).json({
       success: true,
-      message: alreadyMember ? "Already joined room" : "Joined room successfully",
+      message: "Joined room successfully",
       room: populatedRoom,
     });
   } catch (error) {
@@ -111,7 +107,7 @@ const setVideo = async (req, res) => {
 
     await room.save();
 
-    const populatedRoom = await getPopulatedRoom(room._id);
+    const populatedRoom = await getPopulatedRoom(roomId);
 
     req.io.to(room.roomCode).emit("room-updated", populatedRoom);
 
@@ -130,7 +126,6 @@ const verifyVideo = async (req, res) => {
   try {
     const { roomId, hash } = req.body;
     const userId = req.user._id.toString();
-
     const room = await Room.findOne({ roomCode: roomId });
     if (!room) {
       return res.status(404).json({ success: false, message: "Room not found" });
@@ -158,7 +153,7 @@ const verifyVideo = async (req, res) => {
 
     await room.save();
 
-    const populatedRoom = await getPopulatedRoom(room._id);
+    const populatedRoom = await getPopulatedRoom(roomId);
 
     req.io.to(room.roomCode).emit("room-updated", populatedRoom);
 
@@ -195,7 +190,7 @@ const playVideo = async (req, res) => {
     room.status = "playing";
     await room.save();
 
-    const populatedRoom = await getPopulatedRoom(room._id);
+    const populatedRoom = await getPopulatedRoom(roomId);
 
     req.io.to(room.roomCode).emit("room-updated", populatedRoom);
 
