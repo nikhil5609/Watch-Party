@@ -3,15 +3,14 @@ import Room from "./Room";
 import { useDispatch, useSelector } from "react-redux";
 import { useEffect, useRef, useState } from "react";
 import { socket } from "../../socket";
-import { useLocation, useNavigate } from "react-router-dom";
-import { clearRoomState, joinRoom, setRoom } from "../../Store/room.slice";
+import { useNavigate } from "react-router-dom";
+import { joinRoom, setRoom } from "../../Store/room.slice";
 import useUnloadWarning from "../../Hooks/useUnloadWarning";
+import { useGetLiveUser } from "../../Hooks/getLiveUser";
 
 const RoomController = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [presentUser, setPresentUser] = useState([]);
-  const [onlineMembers, setOnlineMembers] = useState([]);
   const [checkingRoom, setCheckingRoom] = useState(true);
   const { room } = useSelector((state) => state.room);
   const { user } = useSelector((state) => state.user);
@@ -20,10 +19,11 @@ const RoomController = () => {
   const isReady = room?.status === "ready" || room?.status === "playing";
 
   useUnloadWarning(hasVideo && isReady);
+  const onlineMembers = useGetLiveUser();
 
- useEffect(() => {
+
+  useEffect(() => {
     if (!room?.roomCode || !user?._id) return;
-
     if (!joinedRef.current) {
       socket.connect();
       socket.emit("join-room", {
@@ -33,24 +33,12 @@ const RoomController = () => {
       joinedRef.current = true;
     }
   }, [room?.roomCode, user?._id]);
-
-
-  useEffect(() => {
-    if (!room?.roomCode || !user?._id) return;
-    const handleRoomUsers = (data) => {
-      setPresentUser(data)
-    };
-    socket.on("room-users", handleRoomUsers);
-    return () => socket.off("room-users", handleRoomUsers);
-  }, [room?.roomCode , user?._id]);
-
+  // Handle room update
   useEffect(() => {
     if (!socket) return;
-
     const handleRoomUpdated = (updatedRoom) => {
       dispatch(setRoom(updatedRoom));
     };
-
     socket.on("room-updated", handleRoomUpdated);
 
     return () => {
@@ -77,17 +65,6 @@ const RoomController = () => {
     restoreRoom();
   }, [room, dispatch, navigate]);
 
-  useEffect(() => {
-    if (!room || !presentUser.length) return;
-    const online = room.members.filter((member) =>
-      presentUser.some(
-        (u) => {
-          return String(u.userId) == String(member.userId?._id)
-        }
-      )
-    );
-    setOnlineMembers(online);
-  }, [presentUser, room]);
 
   if (room?.status === "playing") {
     return <Theater member={onlineMembers} checkingRoom={checkingRoom} />;
