@@ -34,11 +34,11 @@ const Register = () => {
   };
 
   const loginWithGoogle = () => {
-    window.location.href = `http://localhost:3300/auth/google`;
+    window.location.href = `https://watch-party-backend-d12q.onrender.com/auth/google`;
   };
 
   const loginWithGithub = () => {
-    window.location.href = `http://localhost:3300/auth/github`;
+    window.location.href = `https://watch-party-backend-d12q.onrender.com/auth/github`;
   };
 
   return (
