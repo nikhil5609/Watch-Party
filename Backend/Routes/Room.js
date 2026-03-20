@@ -5,10 +5,10 @@ const {createRoom, joinRoom, setVideo, verifyVideo, playVideo} = require('../Con
 const roomRouter = express.Router();
 
 roomRouter
-    .post('/create',createRoom)
-    .post('/join',joinRoom)
-    .post('/set-video',setVideo)
-    .post('/verify-video',verifyVideo)
-    .post('/play',playVideo)
+    .post('/create',verifyToken,createRoom)
+    .post('/join',verifyToken,joinRoom)
+    .post('/set-video',verifyToken,setVideo)
+    .post('/verify-video',verifyToken,verifyVideo)
+    .post('/play',verifyToken,playVideo)
 
 module.exports = roomRouter;
