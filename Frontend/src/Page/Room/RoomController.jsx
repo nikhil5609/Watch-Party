@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { joinRoom, setRoom } from "../../Store/room.slice";
 import useUnloadWarning from "../../Hooks/useUnloadWarning";
 import { useGetLiveUser } from "../../Hooks/getLiveUser";
+import useAudioCall from "../../Hooks/useAudioCall"
 
 const RoomController = () => {
   const dispatch = useDispatch();
@@ -18,10 +19,11 @@ const RoomController = () => {
   const hasVideo = room?.video;
   const isReady = room?.status === "ready" || room?.status === "playing";
 
+  useAudioCall(room?.roomCode, user?._id)
   useUnloadWarning(hasVideo && isReady);
   const onlineMembers = useGetLiveUser();
 
-
+  // Complete Room code here
   useEffect(() => {
     if (!room?.roomCode || !user?._id) return;
     if (!joinedRef.current) {

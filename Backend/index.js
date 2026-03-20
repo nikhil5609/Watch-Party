@@ -1,5 +1,6 @@
 const dotenv = require("dotenv");
 dotenv.config();
+const PORT = process.env.PORT || 3300;
 
 const express = require("express");
 const http = require("http");
@@ -14,75 +15,68 @@ const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const morgan = require("morgan");
 
+const { ExpressPeerServer } = require("peer");
+
 const { joinRoom, leaveRoom, togglePlay, videoTimeStamp } = require("./sockets/room.socket");
+const Room = require("./Model/room.model");
 
-// ----------------- EXPRESS APP -----------------
 const app = express();
-
-// ----------------- HTTP SERVER -----------------
 const httpServer = http.createServer(app);
 
-// ----------------- SOCKET.IO -----------------
 const io = new Server(httpServer, {
   cors: {
     origin: "http://localhost:5173",
     credentials: true,
-  },
+  }
 });
 
-// ----------------- MIDDLEWARES -----------------
+const peerServer = ExpressPeerServer(httpServer, {
+  debug: true
+});
+
+app.use("/peerjs", peerServer);
+
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
 app.use(express.json());
-app.use(
-  cors({
-    origin: "http://localhost:5173",
-    credentials: true,
-  })
-);
+app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 app.use(morgan("dev"));
 app.use(cookieParser());
 app.use(passport.initialize());
+
 require("./Passport/Passport");
 
-// ----------------- ROUTES -----------------
 app.get("/health", (req, res) => {
   res.send("Server is Working");
 });
+
 app.use("/auth", userRouter);
 app.use("/room", roomRouter);
 
-// ----------------- SOCKET EVENTS -----------------
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
 
   socket.on("join-room", (data) => joinRoom(io, socket, data));
   socket.on("leave-room", (data) => leaveRoom(io, socket, data));
   socket.on("toggle-play", (data) => togglePlay(io, socket, data));
-  socket.on("time-stamp",(data) => videoTimeStamp(io,socket,data))
-  socket.on("disconnect", (reason) => {
-  console.log("Socket Disconnected:", socket.id, reason);
-    if (socket.roomId) {
-      leaveRoom(io, socket, {
-        roomId: socket.roomId,
-        userId: socket.userId,
-      });
-    }
-  });
+  socket.on("time-stamp", (data) => videoTimeStamp(io, socket, data));
 
+  socket.on("disconnect", async () => {
+
+    if (!socket.roomId) return;
+
+    const room = await Room.findOne({ roomCode: socket.roomId });
+
+    leaveRoom(io, socket, room?.hostId);
+
+  });
 });
 
-// ----------------- START SERVER -----------------
-connect_to_db()
-  .then(() => {
-    console.log("DB CONNECTED SUCCESSFULLY");
-    httpServer.listen(3300, () => {
-      console.log("Your server is running on Port 3300");
-    });
-  })
-  .catch((err) => {
-    console.log("Something went wrong in db connection", err);
+connect_to_db().then(() => {
+  httpServer.listen(PORT, () => {
+    console.log(`Server running on ${PORT}`);
   });
+});

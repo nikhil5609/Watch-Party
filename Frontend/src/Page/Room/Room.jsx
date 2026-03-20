@@ -27,9 +27,9 @@ const Room = ({ member, checkingRoom }) => {
 
   const { user } = useSelector((state) => state.user);
   const { room } = useSelector((state) => state.room);
-  
+
   const [copied, setCopied] = useState(false);
-  const [isMicEnabled, setIsMicEnabled] = useState(false);
+  const [isMicEnabled, setIsMicEnabled] = useState(true);
   const [mutedMembers, setMutedMembers] = useState([]); // Array of user IDs you have muted locally
 
   if (checkingRoom || !room) return <Loading />;
@@ -126,13 +126,20 @@ const Room = ({ member, checkingRoom }) => {
     dispatch(play({ roomId: room?.roomCode }));
   };
 
-  // Toggle my own microphone
   const toggleMyMic = () => {
-    setIsMicEnabled(!isMicEnabled);
-    // Logic for socket.emit('mute-status', !isMicEnabled) would go here
+
+    const stream = window.localStream;
+
+    if (!stream) return;
+
+    const track = stream.getAudioTracks()[0];
+
+    track.enabled = !track.enabled;
+
+    setIsMicEnabled(track.enabled);
+
   };
 
-  // Toggle muting a specific friend locally
   const toggleMuteFriend = (memberId) => {
     setMutedMembers((prev) =>
       prev.includes(memberId)
@@ -165,16 +172,15 @@ const Room = ({ member, checkingRoom }) => {
           </div>
 
           <div className="mt-8">
-             <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-3">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-3">
               Your Audio
             </p>
             <button
               onClick={toggleMyMic}
-              className={`flex items-center justify-between w-full p-3 rounded-xl border transition-all ${
-                isMicEnabled 
-                ? "bg-red-500/10 border-red-500/40 text-red-500" 
-                : "bg-white/5 border-white/10 text-slate-400"
-              }`}
+              className={`flex items-center justify-between w-full p-3 rounded-xl border transition-all ${isMicEnabled
+                  ? "bg-red-500/10 border-red-500/40 text-red-500"
+                  : "bg-white/5 border-white/10 text-slate-400"
+                }`}
             >
               <div className="flex items-center gap-3">
                 {isMicEnabled ? <Mic size={18} /> : <MicOff size={18} />}
@@ -220,21 +226,19 @@ const Room = ({ member, checkingRoom }) => {
                     </p>
                   </div>
 
-                  {/* VOICE CONTROLS FOR OTHERS */}
                   <div className="flex items-center gap-2">
                     {!isMe && (
-                      <button 
+                      <button
                         onClick={() => toggleMuteFriend(p.userId._id)}
-                        className={`p-2 rounded-lg transition-all ${
-                          isFriendMuted 
-                          ? "bg-red-500/20 text-red-500" 
-                          : "text-slate-500 hover:bg-white/5 hover:text-white"
-                        }`}
+                        className={`p-2 rounded-lg transition-all ${isFriendMuted
+                            ? "bg-red-500/20 text-red-500"
+                            : "text-slate-500 hover:bg-white/5 hover:text-white"
+                          }`}
                       >
                         {isFriendMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
                       </button>
                     )}
-                    
+
                     {p.fileVerified && (
                       <CheckCircle2 size={18} className="text-green-500" />
                     )}

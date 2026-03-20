@@ -7,11 +7,13 @@ const status = {};
 
 /* ================= JOIN ROOM ================= */
 
-const joinRoom = (io, socket, { roomId, userId }) => {
+const joinRoom = (io, socket, { roomId, userId, peerId }) => {
+
   socket.join(roomId);
 
   socket.roomId = roomId;
   socket.userId = userId;
+  socket.peerId = peerId;
 
   if (!roomUsers[roomId]) {
     roomUsers[roomId] = [];
@@ -19,22 +21,35 @@ const joinRoom = (io, socket, { roomId, userId }) => {
 
   const existingUser = roomUsers[roomId].find(
     (u) => String(u.userId) === String(userId)
-  ); // here is first change we are using find instead of some
+  );
 
   if (existingUser) {
     existingUser.socketId = socket.id;
+    existingUser.peerId = peerId;
   } else {
     roomUsers[roomId].push({
       socketId: socket.id,
       userId,
+      peerId,
+      joinedAt: Date.now()
     });
   }
 
+  // send existing peers to new user (for WebRTC)
+  const existingPeers = roomUsers[roomId]
+    .filter((u) => u.socketId !== socket.id)
+    .map((u) => u.peerId);
+
+  socket.emit("existing-peers", existingPeers);
+
+  // notify others
   socket.to(roomId).emit("user-joined", {
     userId,
     socketId: socket.id,
+    peerId
   });
 
+  // cancel room deletion timer
   if (roomDeleteTimers[roomId]) {
     clearTimeout(roomDeleteTimers[roomId]);
     delete roomDeleteTimers[roomId];
@@ -44,8 +59,11 @@ const joinRoom = (io, socket, { roomId, userId }) => {
 };
 
 
+/* ================= LEAVE ROOM ================= */
+
 const leaveRoom = async (io, socket, currentHostId) => {
-  const { roomId, userId } = socket;
+
+  const { roomId, userId, peerId } = socket;
 
   if (!roomId) return;
 
@@ -53,17 +71,19 @@ const leaveRoom = async (io, socket, currentHostId) => {
 
   if (!roomUsers[roomId]) return;
 
-  // Remove user from memory
+  // remove user
   roomUsers[roomId] = roomUsers[roomId].filter(
     (u) => u.socketId !== socket.id
   );
 
+  /* ===== HOST REASSIGNMENT ===== */
+
   if (
-    userId.toString() === currentHostId?.toString() &&
+    userId?.toString() === currentHostId?.toString() &&
     roomUsers[roomId].length !== 0
   ) {
-    let firstUser = null;
 
+    let firstUser = null;
 
     for (const member of roomUsers[roomId]) {
       if (!firstUser || member.joinedAt < firstUser.joinedAt) {
@@ -86,46 +106,59 @@ const leaveRoom = async (io, socket, currentHostId) => {
     io.to(roomId).emit("room-updated", updatedRoom);
   }
 
+  // notify users
   socket.to(roomId).emit("user-left", {
     userId,
     socketId: socket.id,
+    peerId
   });
 
   io.to(roomId).emit("room-users", roomUsers[roomId]);
 
+  /* ===== ROOM DELETE TIMER ===== */
 
   if (roomUsers[roomId].length === 0) {
+
     roomDeleteTimers[roomId] = setTimeout(async () => {
+
       if (roomUsers[roomId]?.length === 0) {
+
         await Room.deleteOne({ roomCode: roomId });
+
         delete roomUsers[roomId];
+
       }
 
       delete roomDeleteTimers[roomId];
+
     }, 10000);
+
   }
 
   socket.roomId = null;
   socket.userId = null;
+  socket.peerId = null;
 };
+
 
 /* ================= PLAY / PAUSE ================= */
 
 const togglePlay = (io, socket, data) => {
+
   const roomId = socket.roomId;
 
-  if (!status[roomId]) {
-    status[roomId] = data;
-  }
+  if (!roomId) return;
 
   status[roomId] = data;
 
   socket.broadcast.to(roomId).emit("control", data);
 };
 
+
 /* ================= VIDEO TIMESTAMP ================= */
 
 const videoTimeStamp = (io, socket, { roomId, time }) => {
+
   if (!roomId) return;
 
   if (!timeStamps[roomId]) {
@@ -138,12 +171,13 @@ const videoTimeStamp = (io, socket, { roomId, time }) => {
     status: status[roomId],
     time: timeStamps[roomId],
   });
+
 };
 
 module.exports = {
   joinRoom,
-  roomUsers,
   leaveRoom,
   togglePlay,
   videoTimeStamp,
+  roomUsers,
 };

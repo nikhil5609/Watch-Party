@@ -6,7 +6,6 @@ import { useDispatch, useSelector } from "react-redux"
 import { verifyUser } from "./Store/user.slice"
 import Success from "./Page/Google/Success"
 import RoomController from "./Page/Room/RoomController"
-import Theater from "./Page/Room/Theater"
 
 function App() {
   const dispatch = useDispatch();
