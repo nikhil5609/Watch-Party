@@ -25,7 +25,7 @@ const httpServer = http.createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: "https://watch-party-frontend-uro4.onrender.com",
     credentials: true,
   }
 });
@@ -42,7 +42,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
-app.use(cors({ origin: "*", credentials: true }));
+app.use(cors({ origin: "https://watch-party-frontend-uro4.onrender.com", credentials: true }));
 app.use(morgan("dev"));
 app.use(cookieParser());
 app.use(passport.initialize());
