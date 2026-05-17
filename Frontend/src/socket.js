@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 
-const SOCKET_URL = "http://localhost:3300";
+const SOCKET_URL = "https://watch-party-backend-ry0f.onrender.com";
 
 // export const socket = io(SOCKET_URL, {
 //   transports: ["websocket"],
