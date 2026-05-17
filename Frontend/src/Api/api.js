@@ -39,11 +39,6 @@ axiosClient.interceptors.response.use(
         error.response.data
       );
 
-      // Optional: auto logout on 401
-      if (error.response.status === 401) {
-        localStorage.removeItem("token");
-        // window.location.href = "/login";
-      }
     }
 
     return Promise.reject(error);

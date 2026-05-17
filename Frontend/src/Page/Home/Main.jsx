@@ -1,44 +1,76 @@
-import { PlusCircle, Users, LogOut, Play, Settings, Bell, Search, Library } from 'lucide-react';
+import { PlusCircle, Users, LogOut, Library, Plus, Globe, Trash2, ExternalLink, Loader2 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logoutUser } from '../../Store/user.slice';
 import { useNavigate } from 'react-router-dom';
 import { createRoom, joinRoom } from '../../Store/room.slice';
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { axiosClient } from '../../Api/api';
 
 const Main = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const {user} = useSelector(state => state.user);
+  const { user } = useSelector(state => state.user);
+  
+  // UI States
   const [showJoinPopup, setShowJoinPopup] = useState(false);
   const [roomId, setRoomId] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  
+  // Data State
+  const [movies, setMovies] = useState([]);
 
-  const handleLogout = () => {
-    dispatch(logoutUser())
-    .then((res) => {
-      navigate('/')
-    })
+  // --- FETCH DYNAMIC DATA ---
+  useEffect(() => {
+    fetchMovies();
+  }, []);
+
+  const fetchMovies = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosClient.get('/movie/get-movies');
+      setMovies(res.data.movies || []);
+    } catch (err) {
+      console.error("Failed to fetch library", err);
+    } finally {
+      setLoading(false);
+    }
   };
-  const createRoomHandler = () => {
-    dispatch(createRoom())
-      .then((res) => {
-        if (res.payload?.success || res.payload?.room) {
-          localStorage.setItem('roomId',res.payload?.room ?.roomCode);
-          navigate('/room');
-        }
-      })
-  }
+
+  const deleteMovie = async (movieId) => {
+    if (!window.confirm("Are you sure you want to delete this?")) return;
+    try {
+      await axiosClient.delete(`/movie/delete/${movieId}`);
+      setMovies(prev => prev.filter(m => m._id !== movieId));
+    } catch (err) {
+      alert("Only the uploader can delete this movie.");
+    }
+  };
+
+  // --- HANDLERS ---
+  const handleLogout = () => {
+    dispatch(logoutUser()).then(() => navigate('/'));
+  };
+
+  const createRoomHandler = (selectedMovie = null) => {
+    dispatch(createRoom()).then((res) => {
+      if (res.payload?.success || res.payload?.room) {
+        localStorage.setItem('roomId', res.payload?.room?.roomCode);
+        navigate('/room', { state: { movie: selectedMovie } });
+      }
+    });
+  };
+
   const joinRoomHandler = () => {
     const cleanRoomId = roomId.trim();
     if (!/^[A-Z0-9]{6}$/.test(cleanRoomId)) {
-      setError('Room ID must be exactly 6 characters (A–Z, 0–9)');
+      setError('Room ID must be 6 characters');
       return;
     }
-
     dispatch(joinRoom(cleanRoomId)).then((res) => {
       if (res.payload?.success || res.payload?.room) {
         setShowJoinPopup(false);
-        localStorage.setItem('roomId',res.payload?.room ?.roomCode);
+        localStorage.setItem('roomId', res.payload?.room?.roomCode);
         navigate('/room');
       } else {
         setError('Invalid Room ID');
@@ -47,188 +79,185 @@ const Main = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col md:flex-row font-sans">
-
+    <div className="min-h-screen bg-[#020617] text-slate-200 flex flex-col md:flex-row font-sans selection:bg-red-500/30">
+      
       {/* --- SIDEBAR --- */}
-      <aside className="w-full md:w-72 bg-slate-900/40 border-r border-slate-800 p-6 flex flex-col gap-8">
-        <div className="flex items-center gap-3">
+      <aside className="w-full md:w-24 lg:w-64 bg-slate-950 border-r border-white/5 p-6 flex flex-col backdrop-blur-2xl">
+        <div className="flex items-center gap-3 px-2 mb-12">
           <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center font-black text-xl shadow-[0_0_20px_rgba(220,38,38,0.3)]">C</div>
-          <span className="text-xl font-bold tracking-tighter">CINE<span className="text-red-600">SYNC</span></span>
+          <span className="text-lg font-black tracking-tighter hidden lg:block italic uppercase">Cine<span className="text-red-600">Sync</span></span>
         </div>
 
-        <nav className="space-y-2">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Activity</p>
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all text-sm">
-            <Play size={18} /> Browse Movies
-          </button>
-
-          {/* SIDEBAR LIBRARY LINK */}
-          <button
-            onClick={() => navigate('/library')}
-            className="w-full flex items-center gap-3 px-4 py-3 bg-white/5 text-white rounded-xl border border-white/10 font-bold text-sm"
-          >
-            <Library size={18} /> My Library
-          </button>
-
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all text-sm">
-            <Users size={18} /> Friends List
-          </button>
+        <nav className="flex-1 space-y-4">
+          <NavItem icon={<Library size={22}/>} label="Library" active={true} onClick={() => navigate('/library')} />
+          <NavItem icon={<PlusCircle size={22}/>} label="Create Room" onClick={() => createRoomHandler()} />
         </nav>
 
-        <div className="mt-auto pt-6 border-t border-slate-800 space-y-4">
-          <div className="flex items-center gap-3 px-2">
-            <img src={user?.user?.profilePicture} alt="User Avatar" className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700" />
-            <div className="flex flex-col overflow-hidden">
-              <span className="text-sm font-bold truncate">{user?.user?.username}</span>
-              <span className="text-[10px] text-green-500 font-medium">● Online</span>
+        <div className="pt-6 border-t border-white/5">
+          <div className="flex items-center gap-3 px-2 mb-6">
+            <img src={user?.profilePicture} className="w-10 h-10 rounded-full border border-white/10 object-cover" alt="pfp" />
+            <div className="hidden lg:block overflow-hidden">
+              <p className="text-sm font-bold truncate text-white">{user?.username}</p>
+              <p className="text-[10px] text-green-500 font-bold uppercase tracking-wider">● Online</p>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all text-sm font-medium"
-          >
-            <LogOut size={18} /> Logout
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-red-500 transition-colors group">
+            <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
+            <span className="hidden lg:block text-sm font-bold">Logout</span>
           </button>
         </div>
       </aside>
 
       {/* --- MAIN CONTENT --- */}
-      <main className="flex-1 flex flex-col">
-
-        <header className="px-8 py-6 flex justify-between items-center bg-slate-950/50 backdrop-blur-sm sticky top-0 z-10">
-          <div className="relative group max-w-md w-full hidden sm:block">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-            <input
-              type="text"
-              placeholder="Search movies or rooms..."
-              className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-12 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-red-600/50 transition-all"
-            />
+      <main className="flex-1 overflow-y-auto">
+        <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-10">
+          
+          {/* HEADER SECTION */}
+          <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
+            <div className="space-y-1">
+              <h1 className="text-4xl font-black text-white tracking-tight">Welcome back, {user?.username}.</h1>
+              <p className="text-slate-500 font-medium">Ready for a watch party? Pick a movie or start a room.</p>
+            </div>
+            
+            <div className="flex gap-4 w-full lg:w-auto">
+              <button 
+                onClick={() => { setShowJoinPopup(true); setError(''); setRoomId(''); }}
+                className="flex-1 lg:flex-none flex items-center justify-center gap-3 bg-white/5 border border-white/10 px-8 py-4 rounded-2xl font-bold text-sm hover:bg-white/10 transition-all active:scale-95"
+              >
+                <Users size={20}/> JOIN ROOM
+              </button>
+              <button 
+                onClick={() => createRoomHandler()}
+                className="flex-1 lg:flex-none flex items-center justify-center gap-3 bg-red-600 px-8 py-4 rounded-2xl font-black text-sm shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all active:scale-95"
+              >
+                <PlusCircle size={20}/> START PARTY
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-4 ml-auto">
-            <button className="p-2.5 text-slate-400 hover:text-white bg-slate-900 rounded-xl border border-slate-800"><Bell size={20} /></button>
-            <button className="p-2.5 text-slate-400 hover:text-white bg-slate-900 rounded-xl border border-slate-800"><Settings size={20} /></button>
-          </div>
-        </header>
 
-        <div className="p-8 max-w-6xl mx-auto w-full">
+          <hr className="border-white/5" />
 
-          {/* Welcome Banner */}
-          <section className="bg-gradient-to-r from-red-700 to-red-900 rounded-[2.5rem] p-8 md:p-12 mb-12 relative overflow-hidden group shadow-2xl shadow-red-900/20">
-            <div className="relative z-10">
-              <h2 className="text-3xl md:text-5xl font-black mb-4">What's the <br />plan tonight?</h2>
-              <p className="text-red-100/80 max-w-sm mb-8 font-medium">Access your personal collection or sync up with the squad for a watch party.</p>
-
-              <div className="flex flex-wrap gap-4">
-                {/* REDIRECT TO LIBRARY */}
-                {/* Welcome Banner Buttons */}
-                <div className="flex flex-wrap gap-4">
-                  {/* Create Room Button */}
-                  <button onClick={() => createRoomHandler()} className="flex items-center gap-2 bg-black/30 backdrop-blur-md text-white border border-white/20 px-8 py-3.5 rounded-2xl font-black text-sm transition-all hover:bg-black/50">
-                    <PlusCircle size={20} /> CREATE ROOM
-                  </button>
-
-                  {/* JOIN ROOM BUTTON IS HERE */}
-                  <button
-                    onClick={() => {
-                      setShowJoinPopup(true);
-                      setError('');
-                      setRoomId('');
-                    }}
-                    className="flex items-center gap-2 bg-black/30 backdrop-blur-md text-white border border-white/20 px-8 py-3.5 rounded-2xl font-black text-sm transition-all hover:bg-black/50"
-                  >
-                    <Users size={20} /> JOIN ROOM
-                  </button>
-
+          {/* DYNAMIC LIBRARY GRID */}
+          <section>
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-red-500/10 rounded-xl text-red-500"><Globe size={22}/></div>
+                <div>
+                  <h2 className="text-xl font-black text-white">Shared Media Library</h2>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-0.5">Community Collection</p>
                 </div>
               </div>
+              <button 
+                onClick={() => navigate('/library')}
+                className="bg-white text-black px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 hover:bg-slate-200 transition-colors shadow-lg"
+              >
+                <Plus size={18}/> ADD TO LIBRARY
+              </button>
             </div>
-            <div className="absolute right-[-10%] bottom-[-20%] text-[200px] opacity-10 rotate-12 select-none group-hover:rotate-0 transition-transform duration-700">🎬</div>
+
+            {loading ? (
+              <div className="flex justify-center py-20"><Loader2 className="animate-spin text-red-600" size={40}/></div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
+                {movies.map((movie) => (
+                  <div key={movie._id} className="group relative">
+                    <div className="aspect-[2/3] bg-slate-900 rounded-[2rem] overflow-hidden border border-white/5 group-hover:border-red-600/40 transition-all relative shadow-2xl">
+                      <img 
+                        src={movie.thumb || `https://images.unsplash.com/photo-1485846234645-a62644f84728?q=80&w=400`} 
+                        className="w-full h-full object-cover opacity-40 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700" 
+                        alt={movie.movieName} 
+                      />
+                      
+                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-end p-5 pb-8 gap-3">
+                        <button 
+                          onClick={() => createRoomHandler(movie)}
+                          className="w-full py-3.5 bg-red-600 text-white rounded-2xl font-black text-[10px] tracking-widest uppercase shadow-xl hover:bg-red-700 transition-colors"
+                        >
+                          PLAY IN ROOM
+                        </button>
+                        <div className="flex gap-2 w-full">
+                          <button 
+                            onClick={() => window.open(movie.movieUrl, '_blank')}
+                            className="flex-1 py-2.5 bg-white/10 backdrop-blur-md text-white rounded-xl flex items-center justify-center hover:bg-white/20 transition-colors"
+                          >
+                            <ExternalLink size={16}/>
+                          </button>
+                          {user?._id === movie.uploader?._id && (
+                            <button 
+                              onClick={() => deleteMovie(movie._id)}
+                              className="flex-1 py-2.5 bg-red-500/10 backdrop-blur-md text-red-500 rounded-xl flex items-center justify-center hover:bg-red-500/20 transition-colors"
+                            >
+                              <Trash2 size={16}/>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 px-3">
+                      <h4 className="font-bold text-white text-sm truncate group-hover:text-red-500 transition-colors tracking-tight">{movie.movieName}</h4>
+                      <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.15em] mt-1.5 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span> 
+                        {user?._id === movie.uploader?._id ? 'Added by you' : `By ${movie.uploader?.username}`}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
-
-          {/* Activity Grid (Remains the same) */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
-              <h3 className="text-xl font-bold">Suggested Movies</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="group cursor-pointer">
-                    <div className="aspect-[2/3] bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 group-hover:border-red-600/50 transition-all mb-3">
-                      <img src={`https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=400&v=${i}`} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="" />
-                    </div>
-                    <p className="text-sm font-bold truncate">Interstellar</p>
-                    <p className="text-xs text-slate-500 font-medium">Sci-Fi • 2014</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-slate-900/50 rounded-3xl p-6 border border-slate-800">
-              <h3 className="text-lg font-bold mb-6 flex items-center justify-between">Live Rooms</h3>
-              <div className="space-y-4">
-                {[1, 2].map((i) => (
-                  <div key={i} className="p-4 bg-slate-950/50 rounded-2xl border border-slate-800 hover:border-slate-700 transition-all cursor-pointer">
-                    <p className="text-sm font-bold mb-2">The Dark Knight Party</p>
-                    <div className="flex -space-x-2">
-                      <div className="w-7 h-7 rounded-full bg-slate-700 border-2 border-slate-950 text-[10px] flex items-center justify-center font-bold">U1</div>
-                      <div className="w-7 h-7 rounded-full bg-slate-800 border-2 border-slate-950 text-[10px] flex items-center justify-center font-bold">U2</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
       </main>
+
+      {/* JOIN ROOM POPUP - (Remains same as your code) */}
       {showJoinPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 w-[90%] max-w-md shadow-2xl">
-
-            <h2 className="text-2xl font-black mb-2">Join Room</h2>
-            <p className="text-sm text-slate-400 mb-6">
-              Enter the 6-digit room ID to join the watch party 🎬
-            </p>
-
-            <input
-              type="text"
-              maxLength={6}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-lg p-6">
+          <div className="bg-[#0f172a] border border-white/10 rounded-[3rem] p-10 w-full max-w-md shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in duration-300">
+            <h3 className="text-3xl font-black text-white mb-2 text-center">Join Party</h3>
+            <p className="text-slate-400 text-center text-sm mb-8 font-medium">Enter the 6-character room code to sync up.</p>
+            
+            <input 
+              type="text" 
+              maxLength={6} 
               value={roomId}
               onChange={(e) => {
-                setRoomId(
-                  e.target.value
-                    .toUpperCase()
-                    .replace(/[^A-Z0-9]/g, '')
-                );
+                setRoomId(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''));
                 setError('');
               }}
-              placeholder="e.g. 3SGF41"
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-lg tracking-widest text-center font-bold outline-none focus:ring-2 focus:ring-red-600"
+              placeholder="000000"
+              className="w-full bg-black border border-white/10 rounded-[1.5rem] py-5 text-center text-4xl font-black tracking-[0.3em] text-red-600 outline-none focus:border-red-600 focus:ring-4 focus:ring-red-600/10 transition-all mb-4 uppercase placeholder:text-slate-800"
             />
 
             {error && (
-              <p className="text-red-500 text-sm mt-3 font-medium">{error}</p>
+              <p className="text-red-500 text-xs font-black uppercase tracking-widest text-center mb-4 animate-pulse">
+                {error}
+              </p>
             )}
 
-            <div className="flex gap-4 mt-8">
-              <button
-                onClick={() => setShowJoinPopup(false)}
-                className="flex-1 py-3 rounded-xl border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 transition-all"
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={joinRoomHandler}
-                className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 font-bold transition-all"
-              >
-                Join
-              </button>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <button onClick={() => setShowJoinPopup(false)} className="py-4 font-bold text-slate-500 hover:text-white transition-colors">Go Back</button>
+              <button onClick={joinRoomHandler} className="py-4 bg-red-600 rounded-[1.25rem] font-black text-white shadow-xl shadow-red-600/30 hover:bg-red-700 transition-all active:scale-95">JOIN NOW</button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 };
+
+const NavItem = ({ icon, label, active, onClick }) => (
+  <button 
+    onClick={onClick}
+    className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${
+      active 
+        ? 'bg-red-600 text-white shadow-lg shadow-red-600/20 active:scale-95' 
+        : 'text-slate-500 hover:text-white hover:bg-white/5 active:scale-95'
+    }`}
+  >
+    <div className={`${active ? 'text-white' : 'group-hover:text-red-500 transition-colors'}`}>
+      {icon}
+    </div>
+    <span className="hidden lg:block text-xs font-black uppercase tracking-widest">{label}</span>
+  </button>
+);
 
 export default Main;

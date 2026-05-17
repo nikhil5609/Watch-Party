@@ -12,7 +12,6 @@ exports.verifyToken = async (req, res, next) => {
         if (!token) {
           return res.status(401).json({ error: 'Unauthorized: Token missing' });
         }
-        
         const isBlacklisted = await BlacklistedToken.findOne({ token });
         if (isBlacklisted) {
           return res.status(401).json({ error: 'Token has been revoked' });

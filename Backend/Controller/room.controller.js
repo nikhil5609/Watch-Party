@@ -14,6 +14,10 @@ const createRoom = async (req, res) => {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
+    const {movieUrl} = req.body
+    if(!movieUrl){
+      return res.status(400).json({success: false,message: "Movie is not selected"});
+    }
     let roomCode;
     let exists = true;
 
@@ -25,8 +29,8 @@ const createRoom = async (req, res) => {
     const room = await Room.create({
       roomCode,
       hostId: req.user._id,
-      members: [{ userId: req.user._id, fileVerified: false }],
-      status: "waiting",
+      movie: videoUrl,
+      members: [{ userId: req.user._id, fileVerified: false }]
     });
 
     const populatedRoom = await getPopulatedRoom(roomCode);
@@ -61,7 +65,7 @@ const joinRoom = async (req, res) => {
       },
       {
         $push: {
-          members: { userId: req.user._id, fileVerified: false }
+          members: { userId: req.user._id}
         }
       }
     );
@@ -81,137 +85,7 @@ const joinRoom = async (req, res) => {
   }
 };
 
-const setVideo = async (req, res) => {
-  try {
-    const { roomId, hash, name, size } = req.body;
-
-    if (!hash) {
-      return res.status(400).json({ success: false, message: "Hash required" });
-    }
-
-    const room = await Room.findOne({ roomCode: roomId });
-    if (!room) {
-      return res.status(404).json({ success: false, message: "Room not found" });
-    }
-
-    if (room.hostId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, message: "Only host allowed" });
-    }
-
-    room.video = { hash, name, size };
-    room.status = "verifying";
-
-    room.members.forEach((m) => {
-      m.fileVerified = m.userId.toString() === req.user._id.toString();
-    });
-
-    await room.save();
-
-    const populatedRoom = await getPopulatedRoom(roomId);
-
-    req.io.to(room.roomCode).emit("room-updated", populatedRoom);
-
-    return res.status(200).json({
-      success: true,
-      message: "Video set successfully",
-      room: populatedRoom,
-    });
-  } catch (error) {
-    console.error("Set video error:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
-  }
-};
-
-const verifyVideo = async (req, res) => {
-  try {
-    const { roomId, hash } = req.body;
-    const userId = req.user._id.toString();
-    const room = await Room.findOne({ roomCode: roomId });
-    if (!room) {
-      return res.status(404).json({ success: false, message: "Room not found" });
-    }
-
-    if (!room.video || room.video.hash !== hash) {
-      return res.status(400).json({
-        success: false,
-        message: "Selected file does not match host video",
-      });
-    }
-
-    const member = room.members.find(
-      (m) => m.userId.toString() === userId
-    );
-
-    if (!member) {
-      return res.status(403).json({ success: false, message: "Not a room member" });
-    }
-
-    member.fileVerified = true;
-
-    const allVerified = room.members.every((m) => m.fileVerified);
-    if (allVerified) room.status = "ready";
-
-    await room.save();
-
-    const populatedRoom = await getPopulatedRoom(roomId);
-
-    req.io.to(room.roomCode).emit("room-updated", populatedRoom);
-
-    return res.status(200).json({
-      success: true,
-      message: allVerified
-        ? "Everyone is ready"
-        : "File verified successfully",
-      room: populatedRoom,
-    });
-  } catch (error) {
-    console.error("Verify video error:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
-  }
-};
-
-const playVideo = async (req, res) => {
-  try {
-    const { roomId } = req.body;
-
-    if (!roomId) {
-      return res.status(400).json({ error: "Room Id is required" });
-    }
-
-    const room = await Room.findOne({ roomCode: roomId });
-    if (!room) {
-      return res.status(404).json({ error: "Room does not exist" });
-    }
-
-    if (room.hostId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: "Only host can start playback" });
-    }
-
-    room.status = "playing";
-    await room.save();
-
-    const populatedRoom = await getPopulatedRoom(roomId);
-
-    req.io.to(room.roomCode).emit("room-updated", populatedRoom);
-
-    return res.status(200).json({
-      success: true,
-      room: populatedRoom,
-    });
-  } catch (error) {
-    console.error("Video Play Failed:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
-  }
-};
-
-
 module.exports = {
   createRoom,
-  joinRoom,
-  setVideo,
-  verifyVideo,
-  playVideo
+  joinRoom
 };

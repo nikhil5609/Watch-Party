@@ -6,6 +6,7 @@ import { useDispatch, useSelector } from "react-redux"
 import { verifyUser } from "./Store/user.slice"
 import Success from "./Page/Google/Success"
 import RoomController from "./Page/Room/RoomController"
+import Library from "./Page/Library/Library"
 
 function App() {
   const dispatch = useDispatch();
@@ -19,6 +20,7 @@ function App() {
         <Route path="" element={<Home />} />
         <Route path="/success" element={<Success />} />
         <Route path='/room' element={<RoomController />} />
+        <Route path="/library" element={<Library />} />
       </Routes>
     </>
   )
