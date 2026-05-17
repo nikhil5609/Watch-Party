@@ -1,4 +1,4 @@
-import { PlusCircle, Users, LogOut, Library, Plus, Globe, Trash2, ExternalLink, Loader2 } from 'lucide-react';
+import { PlusCircle, Users, LogOut, Library, Plus, Globe, Trash2, ExternalLink, Loader2, X, Film } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logoutUser } from '../../Store/user.slice';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +13,7 @@ const Main = () => {
   
   // UI States
   const [showJoinPopup, setShowJoinPopup] = useState(false);
+  const [showCreatePopup, setShowCreatePopup] = useState(false); // New State
   const [roomId, setRoomId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -53,10 +54,11 @@ const Main = () => {
   };
 
   const createRoomHandler = (selectedMovie = null) => {
-    dispatch(createRoom()).then((res) => {
+    dispatch(createRoom(selectedMovie)).then((res) => {
       if (res.payload?.success || res.payload?.room) {
         localStorage.setItem('roomId', res.payload?.room?.roomCode);
         navigate('/room', { state: { movie: selectedMovie } });
+        setShowCreatePopup(false);
       }
     });
   };
@@ -73,7 +75,7 @@ const Main = () => {
         localStorage.setItem('roomId', res.payload?.room?.roomCode);
         navigate('/room');
       } else {
-        setError('Invalid Room ID');
+        setError('Invalid Room ID'); 
       }
     });
   };
@@ -90,7 +92,7 @@ const Main = () => {
 
         <nav className="flex-1 space-y-4">
           <NavItem icon={<Library size={22}/>} label="Library" active={true} onClick={() => navigate('/library')} />
-          <NavItem icon={<PlusCircle size={22}/>} label="Create Room" onClick={() => createRoomHandler()} />
+          <NavItem icon={<PlusCircle size={22}/>} label="Create Room" onClick={() => setShowCreatePopup(true)} />
         </nav>
 
         <div className="pt-6 border-t border-white/5">
@@ -127,7 +129,7 @@ const Main = () => {
                 <Users size={20}/> JOIN ROOM
               </button>
               <button 
-                onClick={() => createRoomHandler()}
+                onClick={() => setShowCreatePopup(true)}
                 className="flex-1 lg:flex-none flex items-center justify-center gap-3 bg-red-600 px-8 py-4 rounded-2xl font-black text-sm shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all active:scale-95"
               >
                 <PlusCircle size={20}/> START PARTY
@@ -163,14 +165,14 @@ const Main = () => {
                   <div key={movie._id} className="group relative">
                     <div className="aspect-[2/3] bg-slate-900 rounded-[2rem] overflow-hidden border border-white/5 group-hover:border-red-600/40 transition-all relative shadow-2xl">
                       <img 
-                        src={movie.thumb || `https://images.unsplash.com/photo-1485846234645-a62644f84728?q=80&w=400`} 
+                        src={`https://images.unsplash.com/photo-1485846234645-a62644f84728?q=80&w=400`} 
                         className="w-full h-full object-cover opacity-40 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700" 
                         alt={movie.movieName} 
                       />
                       
                       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-end p-5 pb-8 gap-3">
                         <button 
-                          onClick={() => createRoomHandler(movie)}
+                          onClick={() => createRoomHandler(movie?.movieUrl)}
                           className="w-full py-3.5 bg-red-600 text-white rounded-2xl font-black text-[10px] tracking-widest uppercase shadow-xl hover:bg-red-700 transition-colors"
                         >
                           PLAY IN ROOM
@@ -208,7 +210,7 @@ const Main = () => {
         </div>
       </main>
 
-      {/* JOIN ROOM POPUP - (Remains same as your code) */}
+      {/* JOIN ROOM POPUP */}
       {showJoinPopup && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-lg p-6">
           <div className="bg-[#0f172a] border border-white/10 rounded-[3rem] p-10 w-full max-w-md shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in duration-300">
@@ -237,6 +239,65 @@ const Main = () => {
               <button onClick={() => setShowJoinPopup(false)} className="py-4 font-bold text-slate-500 hover:text-white transition-colors">Go Back</button>
               <button onClick={joinRoomHandler} className="py-4 bg-red-600 rounded-[1.25rem] font-black text-white shadow-xl shadow-red-600/30 hover:bg-red-700 transition-all active:scale-95">JOIN NOW</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: START PARTY / CHOOSE MOVIE POPUP */}
+      {showCreatePopup && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-lg p-6">
+          <div className="bg-[#0f172a] border border-white/10 rounded-[3rem] p-8 w-full max-w-2xl max-h-[85vh] flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in duration-300">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-2xl font-black text-white">Select Media to Sync</h3>
+              <button 
+                onClick={() => setShowCreatePopup(false)} 
+                className="text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 p-2 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-slate-400 text-sm mb-6 font-medium">Choose a movie below to start your watch party room.</p>
+            
+            {/* Scrollable Content Grid */}
+            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+              <div className="border-t border-white/5 my-4 pt-4">
+                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-4">Or choose from library</p>
+                
+                {movies.length === 0 ? (
+                  <p className="text-center py-8 text-slate-500 text-sm">Your library is empty. Add movies to get started!</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {movies.map((movie) => (
+                      <div 
+                        key={movie._id}
+                        onClick={() => createRoomHandler(movie?.movieUrl)}
+                        className="group flex items-center gap-4 p-3 rounded-2xl bg-slate-950/50 border border-white/5 hover:border-red-600/40 hover:bg-slate-900 transition-all cursor-pointer"
+                      >
+                        <div className="w-14 h-20 bg-slate-900 rounded-xl overflow-hidden flex-shrink-0 border border-white/5">
+                          <img 
+                            src="https://images.unsplash.com/photo-1485846234645-a62644f84728?q=80&w=400" 
+                            className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" 
+                            alt={movie.movieName} 
+                          />
+                        </div>
+                        <div className="overflow-hidden flex-1">
+                          <h4 className="font-bold text-white text-sm truncate group-hover:text-red-500 transition-colors">{movie.movieName}</h4>
+                          <p className="text-[10px] text-slate-500 font-bold truncate mt-1">
+                            By {movie.uploader?.username}
+                          </p>
+                          <span className="inline-block mt-2 text-[9px] font-black tracking-widest bg-red-600/10 text-red-500 px-2 py-0.5 rounded-md uppercase opacity-0 group-hover:opacity-100 transition-opacity">
+                            SELECT
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            
           </div>
         </div>
       )}

@@ -20,7 +20,7 @@ const createRoom = async (req, res) => {
     }
     let roomCode;
     let exists = true;
-
+    
     do {
       roomCode = generateRoomCode(6);
       exists = await Room.exists({ roomCode });
@@ -29,7 +29,7 @@ const createRoom = async (req, res) => {
     const room = await Room.create({
       roomCode,
       hostId: req.user._id,
-      movie: videoUrl,
+      video: movieUrl,
       members: [{ userId: req.user._id, fileVerified: false }]
     });
 

@@ -13,11 +13,11 @@ const initialState = {
 
 export const createRoom = createAsyncThunk(
   "room/create",
-  async (_, thunkAPI) => {
+  async (movieUrl, thunkAPI) => {
     try {
       const res = await axiosClient.post(
         "/room/create",
-        {},
+        {movieUrl},
         { withCredentials: true }
       );
       return res.data;

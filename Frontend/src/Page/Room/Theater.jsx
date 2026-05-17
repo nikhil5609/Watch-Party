@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { socket } from "../../socket";
 import { clearRoomState } from "../../Store/room.slice";
+import { log } from "firebase/firestore/pipelines";
 
 const Theater = ({ member = [] }) => {
   const dispatch = useDispatch();
@@ -94,7 +95,8 @@ const Theater = ({ member = [] }) => {
   const handleSync = (data) => {
     const video = videoRef.current;
     if (!video) return;
-
+    console.log(data);
+    
     if (data.state === "play") {
       if (video.paused) {
         video.muted = true;

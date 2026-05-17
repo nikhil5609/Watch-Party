@@ -3,9 +3,13 @@ import {
   Plus, ArrowLeft, Film, Play, Trash2, Upload, X, FileVideo, Loader2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { createRoom } from '../../Store/room.slice';
 import { axiosClient } from '../../Api/api';
+import { useDispatch } from 'react-redux';
+import { log } from 'firebase/firestore/pipelines';
 
 const Library = () => {
+  const dispatch = useDispatch();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   
@@ -70,6 +74,17 @@ const Library = () => {
       alert("Please select a valid video file.");
     }
   };
+
+  const createRoomHandler = (url) => {
+    console.log("AA");
+    
+    dispatch(createRoom(url)).then((res) => {
+      if (res.payload?.success || res.payload?.room) {
+        localStorage.setItem('roomId', res.payload?.room?.roomCode);
+        navigate('/room', { state: { movie: url } });
+      }
+    });
+  }
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200 font-sans">
@@ -156,7 +171,7 @@ const Library = () => {
         ) : (
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-8">
             {movies.map((movie) => (
-               <MovieCard key={movie._id} movie={movie} />
+               <MovieCard key={movie._id} createRoomHandler={createRoomHandler}  movie={movie} />
             ))}
           </section>
         )}
@@ -165,17 +180,17 @@ const Library = () => {
   );
 };
 
-const MovieCard = ({ movie }) => (
+const MovieCard = ({ movie , createRoomHandler }) => (
   <div className="group flex flex-col">
     <div className="aspect-[2/3] bg-slate-900 rounded-[2rem] overflow-hidden border border-white/5 relative shadow-2xl group-hover:border-red-600/40 transition-all">
       <img 
-        src={movie.thumb || `https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=400`} 
+        src={`https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=400`} 
         alt={movie.movieName}
         className="w-full h-full object-cover opacity-50 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-6 gap-3">
           <button 
-            onClick={() => window.open(movie.movieUrl, '_blank')}
+            onClick={() => createRoomHandler(movie.movieUrl)}
             className="bg-red-600 text-white w-full py-3 rounded-xl font-black text-[10px] tracking-widest flex items-center justify-center gap-2 hover:bg-red-700"
           >
              <Play size={14} fill="currentColor" /> WATCH NOW
