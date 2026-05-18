@@ -87,9 +87,9 @@ const leaveRoom = async (io, socket, currentHostId) => {
 
   /* ===== ROOM DELETE TIMER ===== */
 
-  if (roomUsers[roomId].length === 0) {
-        await Room.deleteOne({ roomCode: roomId });
-        delete roomUsers[roomId];
+  if (roomUsers[roomId]?.length === 0) {
+    await Room.deleteOne({ roomCode: roomId });
+    delete roomUsers[roomId];
   }
   socket.roomId = null;
   socket.userId = null;
@@ -109,20 +109,29 @@ const togglePlay = (io, socket, data) => {
     current_time: data.current_time
   };
 
-  io.to(roomId).emit("control", status[roomId]);
+  socket.to(roomId).emit("control", status[roomId]);
 };
 
 const videoTimeStamp = (io, socket, data) => {
   if (!data.roomId) return;
 
   if (!status[data.roomId]) {
-    status[data.roomId] = {state: "pause",current_time: 0}
+    status[data.roomId] = { state: "pause", current_time: 0 }
   }
 
-  status[data.roomId] = {...status[data.roomId],current_time: data.current_time};
+  status[data.roomId] = { ...status[data.roomId], current_time: data.current_time };
 
   socket.broadcast.to(data.roomId).emit("get-time", status[data.roomId]);
 };
+
+const requestSync = (io, socket, data) => {
+  const roomId = socket.roomId;
+  console.log("roomId",roomId,"status",status[roomId]);
+  if (roomId && status[roomId]) {
+    console.log("A1")
+    socket.emit("control", status[roomId]);
+  }
+}
 
 
 module.exports = {
@@ -131,4 +140,5 @@ module.exports = {
   togglePlay,
   videoTimeStamp,
   roomUsers,
+  requestSync
 };

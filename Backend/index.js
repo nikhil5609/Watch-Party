@@ -16,7 +16,7 @@ const cors = require("cors");
 const morgan = require("morgan");
 
 
-const { joinRoom, leaveRoom, togglePlay, videoTimeStamp } = require("./sockets/room.socket");
+const { joinRoom, leaveRoom, togglePlay, videoTimeStamp, requestSync } = require("./sockets/room.socket");
 const Room = require("./Model/room.model");
 const movieRouter = require("./Routes/Movie");
 
@@ -50,7 +50,7 @@ app.get("/health", (req, res) => {
 });
 app.use("/auth", userRouter);
 app.use("/room", roomRouter);
-app.use("/movie",movieRouter);
+app.use("/movie", movieRouter);
 
 
 // Socket events
@@ -61,6 +61,7 @@ io.on("connection", (socket) => {
   socket.on("leave-room", (data) => leaveRoom(io, socket, data));
   socket.on("toggle-play", (data) => togglePlay(io, socket, data));
   socket.on("time-stamp", (data) => videoTimeStamp(io, socket, data));
+  socket.on("request-sync", (data)=> requestSync(io,socket,data));
   socket.on("disconnect", async () => {
     if (!socket.roomId) return;
     const room = await Room.findOne({ roomCode: socket.roomId });
