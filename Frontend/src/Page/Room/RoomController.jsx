@@ -10,7 +10,6 @@ import { UserPlus, UserMinus, X } from "lucide-react";
 const RoomController = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [hasInteracted, setHasInteracted] = useState(false);
   const { room } = useSelector((state) => state.room);
   const { user } = useSelector((state) => state.user);
 
@@ -99,9 +98,7 @@ const RoomController = () => {
   return (
     <>
       <Theater 
-        member={onlineMembers} 
-        hasInteracted={hasInteracted} 
-        setHasInteracted={setHasInteracted} 
+        member={onlineMembers}
       />
 
       {/* NOTIFICATION STACK */}
