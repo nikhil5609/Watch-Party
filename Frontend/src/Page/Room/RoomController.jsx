@@ -35,15 +35,17 @@ const RoomController = () => {
 
   // Socket Connection & Room Join
   useEffect(() => {
+    console.log("roomCode:", room?.roomCode, "userId:", user);
     if (!room?.roomCode || !user?._id) return;
-    if (!joinedRef.current) {
+    console.log("A2");
       socket.connect();
       socket.emit("join-room", {
         roomId: room.roomCode,
         userId: user._id,
       });
-      joinedRef.current = true;
-    }
+      return () => {
+        socket.disconnect();
+      };
   }, [room?.roomCode, user?._id]);
 
   // Listen for Users Entering/Exiting
