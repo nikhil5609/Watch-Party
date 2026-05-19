@@ -11,5 +11,6 @@ const upload = multer({ dest: "uploads/" });
 movieRouter
     .post('/add',verifyToken,upload.single("video"),addMovie)
     .get('/get-movies',verifyToken,getMovies)
+    .delete('/delete/:movieId',verifyToken,deleteMovie)
 
 module.exports = movieRouter;

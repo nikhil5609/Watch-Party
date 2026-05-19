@@ -70,7 +70,39 @@ const getMovies = async (req,res) => {
     }
 }
 
+const deleteMovie = async (req, res) => {
+  try {
+    const { movieId } = req.params;
+    const userId = req.user._id;
+ 
+    const movie = await Movie.findById(movieId);
+ 
+    if (!movie) {
+      return res.status(404).json({ status: "failed", message: "Movie not found" });
+    }
+ 
+    // Only the uploader can delete their own movie
+    if (movie.uploader.toString() !== userId.toString()) {
+      return res.status(403).json({ status: "failed", message: "Not authorized to delete this movie" });
+    }
+ 
+    await Movie.findByIdAndDelete(movieId);
+ 
+    const allMovies = await Movie.find().populate('uploader', 'username');
+ 
+    return res.status(200).json({
+      status: "success",
+      message: "Movie deleted successfully",
+      movies: allMovies,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ status: "error", message: "Internal Server Error" });
+  }
+};
+
 module.exports = {
     addMovie,
-    getMovies
+    getMovies,
+    deleteMovie
 };

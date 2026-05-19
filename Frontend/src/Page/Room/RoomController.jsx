@@ -32,19 +32,21 @@ const RoomController = () => {
     }, 4000);
   };
 
-  // Socket Connection & Room Join
   useEffect(() => {
-    console.log("roomCode:", room?.roomCode, "userId:", user);
     if (!room?.roomCode || !user?._id) return;
-    console.log("A2");
+ 
+    if (!socket.connected) {
       socket.connect();
-      socket.emit("join-room", {
-        roomId: room.roomCode,
-        userId: user._id,
-      });
-      return () => {
-        socket.disconnect();
-      };
+    }
+ 
+    socket.emit("join-room", {
+      roomId: room.roomCode,
+      userId: user._id,
+    });
+ 
+    return () => {
+      socket.disconnect();
+    };
   }, [room?.roomCode, user?._id]);
 
   // Listen for Users Entering/Exiting

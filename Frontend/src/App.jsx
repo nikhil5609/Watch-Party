@@ -10,7 +10,9 @@ import Library from "./Page/Library/Library"
 
 function App() {
   const dispatch = useDispatch();
-  dispatch(verifyUser())
+  useEffect(() => {
+    dispatch(verifyUser());
+  }, [dispatch]);
 
   return (
     <>

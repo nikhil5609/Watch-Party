@@ -3,7 +3,6 @@ import { Github, Mail, Lock, Chrome, ArrowRight, Eye, EyeOff } from 'lucide-reac
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { loginUser } from '../../Store/user.slice';
-import { log } from 'firebase/firestore/pipelines';
 
 const Login = () => {
   const dispatch = useDispatch();

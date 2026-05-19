@@ -101,7 +101,7 @@ const logoutUser = async (req, res) => {
     }
     await BlacklistedToken.create({
       token,
-      expiresAt: new Date(Date.now() + (24*100000)),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
 
     res.clearCookie("token", cookieOptions);
