@@ -1,9 +1,10 @@
 import { Route, Router, Routes } from "react-router-dom"
+import { useDispatch, useSelector } from "react-redux"
+import { verifyUser } from "./Store/user.slice"
+import { useEffect } from "react"
 import Login from './Page/Login/Login'
 import Register from './Page/Register/Register'
 import Home from './Page/Home/Home'
-import { useDispatch, useSelector } from "react-redux"
-import { verifyUser } from "./Store/user.slice"
 import Success from "./Page/Google/Success"
 import RoomController from "./Page/Room/RoomController"
 import Library from "./Page/Library/Library"
