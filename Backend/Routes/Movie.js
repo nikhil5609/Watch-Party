@@ -1,6 +1,6 @@
 const express = require('express');
 const { verifyToken } = require('../Middleware/auth.middleware');
-const { addMovie, getMovies } = require('../Controller/movie.controller');
+const { addMovie, getMovies, deleteMovie } = require('../Controller/movie.controller');
 const multer = require('multer');
 
 const movieRouter = express.Router();
