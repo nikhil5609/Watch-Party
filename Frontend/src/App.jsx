@@ -7,7 +7,7 @@ import Register from './Page/Register/Register'
 import Home from './Page/Home/Home'
 import RoomController from "./Page/Room/RoomController"
 import Library from "./Page/Library/Library"
-import Success from './Success'
+import Success from './Page/Google/Success'
 
 function App() {
   const dispatch = useDispatch();
