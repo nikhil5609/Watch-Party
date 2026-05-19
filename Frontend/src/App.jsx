@@ -5,9 +5,9 @@ import { useEffect } from "react"
 import Login from './Page/Login/Login'
 import Register from './Page/Register/Register'
 import Home from './Page/Home/Home'
-import Success from "./Page/Google/Success"
 import RoomController from "./Page/Room/RoomController"
 import Library from "./Page/Library/Library"
+import Success from './Success'
 
 function App() {
   const dispatch = useDispatch();
