@@ -29,8 +29,9 @@ userRouter.get(
 
 userRouter.get(
   '/google/callback',
-  passport.authenticate('google', { session: false,failureRedirect: process.env.GOOGLE_AUTH_CLIENT_URL_FAILURE,
-}),
+  passport.authenticate('google', {
+    session: false, failureRedirect: process.env.GOOGLE_AUTH_CLIENT_URL_FAILURE,
+  }),
   googleCallback
 );
 

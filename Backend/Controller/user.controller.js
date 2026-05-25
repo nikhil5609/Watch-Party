@@ -129,20 +129,25 @@ const deleteUser = async (req, res) => {
 
 /* --------------GOOGLE CALLBACK---------------*/
 const googleCallback = async (req, res) => {
-  const token = jwt.sign(
-    { userId: req.user._id, email: req.user.email },
-    process.env.JWT_SECRET,
-    { expiresIn: "7d" }
-  );
-  res.cookie("token", token, cookieOptions);
-
-  res.redirect(`${process.env.GOOGLE_AUTH_CLIENT_URL_SUCCESS}/success`);
+  try {
+    const token = jwt.sign(
+      { _id : req.user._id, email: req.user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+    res.cookie("token", token, cookieOptions);
+  
+    return res.redirect(`https://watch-party-frontend-ovmj.onrender.com/success?token=${token}`);
+  } catch (error) {
+    console.error("Google Auth Callback Error:", error);
+    return res.redirect("https://watch-party-frontend-ovmj.onrender.com/login");
+  }
 };
 
 module.exports = {
   createUser,
   loginUser,
-  logoutUser,
+  logoutUser, 
   deleteUser,
   googleCallback,
 };

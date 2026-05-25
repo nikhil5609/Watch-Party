@@ -5,6 +5,7 @@ import { socket } from "../../socket";
 import { useNavigate } from "react-router-dom";
 import { joinRoom, setRoom } from "../../Store/room.slice";
 import { useGetLiveUser } from "../../Hooks/getLiveUser";
+import { useWebRTC } from "../../Hooks/useWebRTC";
 import { UserPlus, UserMinus, X } from "lucide-react";
 
 const RoomController = () => {
@@ -20,6 +21,9 @@ const RoomController = () => {
 
   const onlineMembers = useGetLiveUser();
 
+  // WebRTC mesh audio
+  const webrtc = useWebRTC(room?.roomCode);
+
   useEffect(() => {
     membersRef.current = onlineMembers;
   }, [onlineMembers]);
@@ -34,17 +38,19 @@ const RoomController = () => {
 
   useEffect(() => {
     if (!room?.roomCode || !user?._id) return;
- 
+
     if (!socket.connected) {
       socket.connect();
     }
- 
+
     socket.emit("join-room", {
       roomId: room.roomCode,
       userId: user._id,
     });
- 
+
     return () => {
+      // Leave call if active before disconnecting
+      if (webrtc.isInCall) webrtc.leaveCall();
       socket.disconnect();
     };
   }, [room?.roomCode, user?._id]);
@@ -54,13 +60,17 @@ const RoomController = () => {
     if (!socket) return;
 
     const handleUserJoined = (data) => {
-      const userObj = membersRef.current.find(m => m.userId._id === data.userId);
+      const userObj = membersRef.current.find(
+        (m) => m.userId._id === data.userId
+      );
       const userName = userObj?.userId?.username || "New viewer";
       addToast(userName, "join");
     };
 
     const handleUserLeft = (data) => {
-      const userObj = membersRef.current.find(m => m.userId._id === data.userId);
+      const userObj = membersRef.current.find(
+        (m) => m.userId._id === data.userId
+      );
       const userName = userObj?.userId?.username || "A viewer";
       addToast(userName, "left");
     };
@@ -90,18 +100,15 @@ const RoomController = () => {
           return;
         }
         const res = await dispatch(joinRoom(roomId));
-        if (res.payload?.success === false) navigate('/');
+        if (res.payload?.success === false) navigate("/");
       }
     };
     restoreRoom();
   }, [room, dispatch, navigate]);
 
-
   return (
     <>
-      <Theater 
-        member={onlineMembers}
-      />
+      <Theater member={onlineMembers} webrtc={webrtc} />
 
       {/* NOTIFICATION STACK */}
       <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none">
@@ -110,19 +117,30 @@ const RoomController = () => {
             key={n.id}
             className="flex items-center gap-4 px-4 py-3 bg-slate-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-notification"
           >
-            <div className={`p-2 rounded-xl ${n.type === 'join' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-              {n.type === 'join' ? <UserPlus size={18} /> : <UserMinus size={18} />}
+            <div
+              className={`p-2 rounded-xl ${
+                n.type === "join"
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : "bg-red-500/20 text-red-400"
+              }`}
+            >
+              {n.type === "join" ? <UserPlus size={18} /> : <UserMinus size={18} />}
             </div>
             <div className="flex flex-col">
               <p className="text-xs font-bold text-white/40 uppercase tracking-widest leading-none mb-1">
-                {n.type === 'join' ? 'Arrival' : 'Departure'}
+                {n.type === "join" ? "Arrival" : "Departure"}
               </p>
               <p className="text-sm font-medium text-white">
-                {n.username} {n.type === 'join' ? 'entered' : 'left'}
+                {n.username} {n.type === "join" ? "entered" : "left"}
               </p>
             </div>
             <button className="ml-2 text-white/20 hover:text-white pointer-events-auto">
-              <X size={14} onClick={() => setNotifications(prev => prev.filter(t => t.id !== n.id))} />
+              <X
+                size={14}
+                onClick={() =>
+                  setNotifications((prev) => prev.filter((t) => t.id !== n.id))
+                }
+              />
             </button>
           </div>
         ))}

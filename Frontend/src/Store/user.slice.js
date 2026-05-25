@@ -81,6 +81,7 @@ export const verifyUser = createAsyncThunk(
       const res = await axiosClient.get("/auth/isAuthenticated");
       return res.data;
     } catch (error) {
+      console.log(error);
       return thunkAPI.rejectWithValue(
         error.response?.data || error.message
       );
@@ -135,14 +136,17 @@ export const userSlice = createSlice({
       .addCase(logoutUser.pending, (state) => {
         state.user = null;
         state.loggedIn = false;
+        localStorage.removeItem("token");
       })
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
         state.loggedIn = false;
+        localStorage.removeItem("token");
       })
       .addCase(logoutUser.rejected, (state) => {
         state.user = null;
         state.loggedIn = false;
+        localStorage.removeItem("token");
       })
 
 

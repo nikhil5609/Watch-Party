@@ -22,6 +22,7 @@ const movieRouter = require("./Routes/Movie");
 
 const app = express();
 const httpServer = http.createServer(app);
+app.use(cookieParser());
 
 const io = new Server(httpServer, {
   cors: {
@@ -39,7 +40,6 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(cors({ origin: "https://watch-party-frontend-ovmj.onrender.com", credentials: true }));
 app.use(morgan("dev"));
-app.use(cookieParser());
 app.use(passport.initialize());
 
 require("./Passport/Passport");
@@ -61,11 +61,57 @@ io.on("connection", (socket) => {
   socket.on("leave-room", (data) => leaveRoom(io, socket, data));
   socket.on("toggle-play", (data) => togglePlay(io, socket, data));
   socket.on("time-stamp", (data) => videoTimeStamp(io, socket, data));
-  socket.on("request-sync", (data)=> requestSync(io,socket,data));
+  socket.on("request-sync", (data) => requestSync(io, socket, data));
+
+
+  socket.on("webrtc-join-call", ({ roomId, userId, username }) => {
+    // Tell everyone else in the room that this socket joined the call
+    socket.to(roomId).emit("webrtc-user-joined", {
+      socketId: socket.id,
+      userId,
+      username,
+    });
+  });
+
+  socket.on("webrtc-offer", ({ to, offer }) => {
+    // Relay offer to a specific socket
+    io.to(to).emit("webrtc-offer", {
+      from: socket.id,
+      offer,
+    });
+  });
+
+  socket.on("webrtc-answer", ({ to, answer }) => {
+    // Relay answer to a specific socket
+    io.to(to).emit("webrtc-answer", {
+      from: socket.id,
+      answer,
+    });
+  });
+
+  socket.on("webrtc-ice", ({ to, candidate }) => {
+    // Relay ICE candidate to a specific socket
+    io.to(to).emit("webrtc-ice", {
+      from: socket.id,
+      candidate,
+    });
+  });
+
+  socket.on("webrtc-leave-call", ({ roomId }) => {
+    // Tell everyone in the room this socket left the call
+    socket.to(roomId).emit("webrtc-user-left", {
+      socketId: socket.id,
+    });
+  });
+
+
   socket.on("disconnect", async () => {
     if (!socket.roomId) return;
     const room = await Room.findOne({ roomCode: socket.roomId });
     leaveRoom(io, socket, room?.hostId);
+    socket.rooms.forEach((roomId) => {
+      socket.to(roomId).emit("webrtc-user-left", { socketId: socket.id });
+    });
   });
 });
 // Server Connection

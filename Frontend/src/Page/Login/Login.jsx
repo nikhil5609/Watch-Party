@@ -40,7 +40,7 @@ const Login = () => {
   };
 
   const loginWithGithub = () => {
-    window.location.href = `http://https://watch-party-backend-ry0f.onrender.com/auth/github`;
+    window.location.href = `https://watch-party-backend-ry0f.onrender.com/auth/github`;
   };
 
   return (

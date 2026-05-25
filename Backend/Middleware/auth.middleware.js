@@ -9,6 +9,8 @@ exports.verifyToken = async (req, res, next) => {
       authHeader?.startsWith('Bearer ')
         ? authHeader.split(' ')[1]
         : req.cookies?.token;
+        console.log(token);
+        
         if (!token) {
           return res.status(401).json({ error: 'Unauthorized: Token missing' });
         }
@@ -21,10 +23,10 @@ exports.verifyToken = async (req, res, next) => {
         const user = await User.findById(decoded?._id || decoded?.userId || decoded.email).select(
           '-password'
         );
-    if (!user) {
-      return res.status(401).json({ error: 'User not found' });
-    }
-
+        if (!user) {
+          return res.status(401).json({ error: 'User not found' });
+        }
+        
     req.user = user;
     req.token = token;
     

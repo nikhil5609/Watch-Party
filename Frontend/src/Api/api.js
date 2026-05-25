@@ -9,12 +9,17 @@ export const axiosClient = axios.create({
   },
 });
 
+const getTokenFromCookie = () => {
+  const match = document.cookie.match(/(?:^|;\s*)token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+};
+
 /* =====================
    REQUEST INTERCEPTOR
 ===================== */
 axiosClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = getTokenFromCookie() || localStorage.getItem("token");
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

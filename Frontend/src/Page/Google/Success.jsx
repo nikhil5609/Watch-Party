@@ -1,57 +1,42 @@
 import React, { useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { verifyUser } from '../../Store/user.slice';
-import { useNavigate } from 'react-router-dom';
 
 const Success = () => {
-    const dispatch = useDispatch();
-    const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
 
-    useEffect(() => {
-        dispatch(verifyUser())
-            .then((res) => {
-                if (res.payload?.user) {
-                  console.log(res);
-                    if(res.payload?.token){
-                        localStorage.setItem("token",res.payload?.token);
-                    }
-                    navigate('/');
-                } else {
-                    navigate('/login');
-                }
-            })
-            .catch(() => {
-                navigate('/login');
-            });
-    }, [dispatch, navigate]);
+  useEffect(() => {
+    const token = searchParams.get('token');
 
-    return (
-        <div style={styles.container}>
-            <div style={styles.loader}></div>
-            <p>Verifying your session, please wait...</p>
-        </div>
-    );
-};
-
-// Simple CSS-in-JS for the loading look
-const styles = {
-    container: {
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        fontFamily: 'Arial, sans-serif'
-    },
-    loader: {
-        border: '4px solid #f3f3f3',
-        borderTop: '4px solid #3498db',
-        borderRadius: '50%',
-        width: '40px',
-        height: '40px',
-        animation: 'spin 2s linear infinite',
-        marginBottom: '20px'
+    if (token) {
+      // 1. Save the token immediately so the Axios interceptor grabs it
+      localStorage.setItem('token', token);
+      
+      // 2. Dispatch verifyUser to update the global Redux state
+      dispatch(verifyUser())
+        .unwrap()
+        .then(() => {
+          navigate('/'); // Send them to the dashboard/homepage
+        })
+        .catch((err) => {
+          console.error("Verification failed:", err);
+          localStorage.removeItem('token');
+          navigate('/login');
+        });
+    } else {
+      navigate('/login');
     }
+  }, [searchParams, dispatch, navigate]);
+
+  return (
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-red-600 mb-4"></div>
+      <p className="font-bold tracking-widest text-sm text-slate-400 uppercase">Syncing your session...</p>
+    </div>
+  );
 };
 
 export default Success;

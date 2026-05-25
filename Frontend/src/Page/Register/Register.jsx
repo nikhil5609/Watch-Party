@@ -22,7 +22,6 @@ const Register = () => {
     dispatch(createUser(user))
     .then((res)=>{
       if(res?.payload?.user){
-        localStorage.setItem('token',res?.payload?.token);
         navigate('/')
       }
 
@@ -34,11 +33,11 @@ const Register = () => {
   };
 
   const loginWithGoogle = () => {
-    window.location.href = `http://https://watch-party-backend-ry0f.onrender.com/auth/google`;
+    window.location.href = `https://watch-party-backend-ry0f.onrender.com/auth/google`;
   };
 
   const loginWithGithub = () => {
-    window.location.href = `http://https://watch-party-backend-ry0f.onrender.com/auth/github`;
+    window.location.href = `https://watch-party-backend-ry0f.onrender.com/auth/github`;
   };
 
   return (
