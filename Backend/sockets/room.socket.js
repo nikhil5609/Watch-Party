@@ -126,12 +126,11 @@ const videoTimeStamp = (io, socket, data) => {
 
 const requestSync = (io, socket, data) => {
   const roomId = socket.roomId;
-  console.log("roomId",roomId,"status",status[roomId]);
   if (roomId && status[roomId]) {
-    console.log("A1")
     socket.emit("control", status[roomId]);
   }
-}
+} 
+
 
 
 module.exports = {

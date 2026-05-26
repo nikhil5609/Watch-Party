@@ -64,8 +64,14 @@ io.on("connection", (socket) => {
   socket.on("request-sync", (data) => requestSync(io, socket, data));
 
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Paste these inside your  io.on("connection", (socket) => { ... })  block
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // WebRTC signaling — the server only relays messages, no media touches it
+
   socket.on("webrtc-join-call", ({ roomId, userId, username }) => {
-    // Tell everyone else in the room that this socket joined the call
+    // Tell every other socket in the room that this user joined the call
     socket.to(roomId).emit("webrtc-user-joined", {
       socketId: socket.id,
       userId,
@@ -73,24 +79,26 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("webrtc-offer", ({ to, offer }) => {
-    // Relay offer to a specific socket
+  // ⚠️  FIX: forward userId + username so the answerer knows who is calling
+  socket.on("webrtc-offer", ({ to, offer, userId, username }) => {
     io.to(to).emit("webrtc-offer", {
       from: socket.id,
       offer,
+      userId,    // ← was missing before
+      username,  // ← was missing before
     });
   });
 
-  socket.on("webrtc-answer", ({ to, answer }) => {
-    // Relay answer to a specific socket
+  socket.on("webrtc-answer", ({ to, answer, userId, username }) => {
     io.to(to).emit("webrtc-answer", {
       from: socket.id,
       answer,
+      userId,
+      username,
     });
   });
 
   socket.on("webrtc-ice", ({ to, candidate }) => {
-    // Relay ICE candidate to a specific socket
     io.to(to).emit("webrtc-ice", {
       from: socket.id,
       candidate,
@@ -98,10 +106,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("webrtc-leave-call", ({ roomId }) => {
-    // Tell everyone in the room this socket left the call
-    socket.to(roomId).emit("webrtc-user-left", {
-      socketId: socket.id,
-    });
+    socket.to(roomId).emit("webrtc-user-left", { socketId: socket.id });
   });
 
 

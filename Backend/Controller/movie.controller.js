@@ -17,8 +17,6 @@ const addMovie = async (req, res) => {
 
         // 🟢 Create movie payload
         const url = await uploadToCloudinary(filePath);
-        console.log(url);
-        
         const details = {
             movieName,
             movieUrl: url,

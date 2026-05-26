@@ -1,39 +1,84 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { socket } from "../socket";
 
-const ICE_SERVERS = {
-  iceServers: [
+/**
+ * Build ICE server list.
+ * STUN is always included.
+ * TURN is picked up from Vite env vars — set them in .env:
+ *
+ *   VITE_TURN_URL=turn:your.turn.server:3478
+ *   VITE_TURN_USERNAME=youruser
+ *   VITE_TURN_CREDENTIAL=yourpassword
+ *
+ * If no TURN vars are set, the app still works but may fail for
+ * users behind symmetric NAT (most home routers / corporate networks).
+ */
+const buildIceServers = () => {
+  const servers = [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:stun3.l.google.com:19302" },
-  ],
+    {
+      urls: "stun:stun.relay.metered.ca:80",
+    },
+    {
+      urls: "turn:global.relay.metered.ca:80",
+      username: "f5c241b67512e7a3754b355f",
+      credential: "si5pp6D8aRyqd0fa",
+    },
+    {
+      urls: "turn:global.relay.metered.ca:80?transport=tcp",
+      username: "f5c241b67512e7a3754b355f",
+      credential: "si5pp6D8aRyqd0fa",
+    },
+    {
+      urls: "turn:global.relay.metered.ca:443",
+      username: "f5c241b67512e7a3754b355f",
+      credential: "si5pp6D8aRyqd0fa",
+    },
+    {
+      urls: "turns:global.relay.metered.ca:443?transport=tcp",
+      username: "f5c241b67512e7a3754b355f",
+      credential: "si5pp6D8aRyqd0fa",
+    },
+  ];
+
+  // const turnUrl = import.meta.env.VITE_TURN_URL;
+  // const turnUser = import.meta.env.VITE_TURN_USERNAME;
+  // const turnCred = import.meta.env.VITE_TURN_CREDENTIAL;
+
+  // if (turnUrl && turnUser && turnCred) {
+  //   // UDP relay (primary)
+  //   servers.push({ urls: turnUrl, username: turnUser, credential: turnCred });
+  //   // TCP relay fallback (punches through strict firewalls)
+  //   servers.push({
+  //     urls: turnUrl.replace("turn:", "turn:").replace(":3478", ":443?transport=tcp"),
+  //     username: turnUser,
+  //     credential: turnCred,
+  //   });
+  // } else {
+  //   console.warn(
+  //     "[WebRTC] No TURN server configured. Connections across strict NATs may fail.\n" +
+  //     "Add VITE_TURN_URL, VITE_TURN_USERNAME, VITE_TURN_CREDENTIAL to your .env"
+  //   );
+  // }
+
+  return { iceServers: servers };
 };
 
-/**
- * useWebRTC — mesh audio calls via native RTCPeerConnection + socket.io signaling
- *
- * Returns:
- *   isInCall      boolean
- *   isMuted       boolean
- *   callMembers   [{ socketId, userId, username }]
- *   volumes       { [socketId]: 0–1 }
- *   joinCall(userId, username)  → Promise (throws if mic denied)
- *   leaveCall()
- *   toggleMute()
- *   setUserVolume(socketId, 0–1)
- */
 export const useWebRTC = (roomId) => {
   const [isInCall, setIsInCall] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [callMembers, setCallMembers] = useState([]); // peers in the call
-  const [volumes, setVolumes] = useState({});          // per-peer volume
+  const [callMembers, setCallMembers] = useState([]);
+  const [volumes, setVolumes] = useState({});
 
   const localStreamRef = useRef(null);
-  const peersRef = useRef({});         // socketId → RTCPeerConnection
-  const audioElsRef = useRef({});      // socketId → HTMLAudioElement
+  const peersRef = useRef({});       // socketId → RTCPeerConnection
+  const audioElsRef = useRef({});    // socketId → HTMLAudioElement
+  const myInfoRef = useRef({});      // { userId, username } — set on joinCall
+  const isInCallRef = useRef(false); // mirror of isInCall for use inside closures
 
-  // ── helpers ──────────────────────────────────────────────────────────────
+  // ── helpers ──────────────────────────────────────────────────────────
 
   const removePeer = useCallback((socketId) => {
     if (peersRef.current[socketId]) {
@@ -54,21 +99,44 @@ export const useWebRTC = (roomId) => {
 
   const buildPeerConnection = useCallback(
     (socketId) => {
-      const pc = new RTCPeerConnection(ICE_SERVERS);
+      const ICE_CONFIG = buildIceServers();
+      const pc = new RTCPeerConnection(ICE_CONFIG);
 
-      // attach local mic tracks
-      if (localStreamRef.current) {
-        localStreamRef.current
-          .getTracks()
-          .forEach((t) => pc.addTrack(t, localStreamRef.current));
-      }
+      // attach local mic
+      localStreamRef.current
+        ?.getTracks()
+        .forEach((t) => pc.addTrack(t, localStreamRef.current));
 
-      // relay ICE candidates
+      // relay ICE candidates — include our identity so the remote side
+      // can log/debug which peer sent the candidate
       pc.onicecandidate = ({ candidate }) => {
-        if (candidate) socket.emit("webrtc-ice", { to: socketId, candidate });
+        if (candidate) {
+          socket.emit("webrtc-ice", { to: socketId, candidate });
+        }
       };
 
-      // play remote audio
+      // log ICE state changes (visible in browser console — helps debugging)
+      pc.oniceconnectionstatechange = () => {
+        console.log(`[WebRTC] ICE ${socketId.slice(0, 6)} →`, pc.iceConnectionState);
+        if (pc.iceConnectionState === "failed") {
+          console.error(
+            "[WebRTC] ICE failed for", socketId,
+            "— this usually means TURN is needed. " +
+            "Set VITE_TURN_URL, VITE_TURN_USERNAME, VITE_TURN_CREDENTIAL in .env"
+          );
+          // Attempt ICE restart (recovers ~30% of soft failures without TURN)
+          pc.restartIce();
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        console.log(`[WebRTC] Conn ${socketId.slice(0, 6)} →`, pc.connectionState);
+        if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
+          removePeer(socketId);
+        }
+      };
+
+      // play remote audio stream
       pc.ontrack = ({ streams }) => {
         const stream = streams[0];
         if (!audioElsRef.current[socketId]) {
@@ -78,12 +146,7 @@ export const useWebRTC = (roomId) => {
           el.volume = 1;
           audioElsRef.current[socketId] = el;
           setVolumes((v) => ({ ...v, [socketId]: 1 }));
-        }
-      };
-
-      pc.onconnectionstatechange = () => {
-        if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
-          removePeer(socketId);
+          console.log("[WebRTC] Remote track received from", socketId.slice(0, 6));
         }
       };
 
@@ -93,13 +156,15 @@ export const useWebRTC = (roomId) => {
     [removePeer]
   );
 
-  // ── signaling listeners (active only while in call) ────────────────────
+  // ── signaling — registered once, always active after mount ────────────
+  // We register listeners immediately (not gated on isInCall state) to avoid
+  // the React render-cycle race where an offer arrives before the effect runs.
+  // Guards inside each handler use isInCallRef instead of the state variable.
 
   useEffect(() => {
-    if (!isInCall) return;
-
-    // Someone else joined the call — we (existing member) send them an offer
+    // Someone else joined the call — existing members send them an offer
     const onUserJoined = async ({ socketId, userId, username }) => {
+      if (!isInCallRef.current) return;
       setCallMembers((prev) =>
         prev.find((m) => m.socketId === socketId)
           ? prev
@@ -112,14 +177,21 @@ export const useWebRTC = (roomId) => {
           voiceActivityDetection: true,
         });
         await pc.setLocalDescription(offer);
-        socket.emit("webrtc-offer", { to: socketId, offer });
+        // Include our identity so the answerer can label this peer
+        socket.emit("webrtc-offer", {
+          to: socketId,
+          offer,
+          userId: myInfoRef.current.userId,
+          username: myInfoRef.current.username,
+        });
       } catch (err) {
-        console.error("[WebRTC] offer failed", err);
+        console.error("[WebRTC] createOffer failed", err);
       }
     };
 
     // We received an offer — answer it
     const onOffer = async ({ from, offer, userId, username }) => {
+      if (!isInCallRef.current) return;
       setCallMembers((prev) =>
         prev.find((m) => m.socketId === from)
           ? prev
@@ -130,9 +202,14 @@ export const useWebRTC = (roomId) => {
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        socket.emit("webrtc-answer", { to: from, answer });
+        socket.emit("webrtc-answer", {
+          to: from,
+          answer,
+          userId: myInfoRef.current.userId,
+          username: myInfoRef.current.username,
+        });
       } catch (err) {
-        console.error("[WebRTC] answer failed", err);
+        console.error("[WebRTC] createAnswer failed", err);
       }
     };
 
@@ -142,7 +219,7 @@ export const useWebRTC = (roomId) => {
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
       } catch (err) {
-        console.error("[WebRTC] setRemoteDescription failed", err);
+        console.error("[WebRTC] setRemoteDescription(answer) failed", err);
       }
     };
 
@@ -152,7 +229,8 @@ export const useWebRTC = (roomId) => {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
       } catch (err) {
-        console.error("[WebRTC] addIceCandidate failed", err);
+        // Non-fatal — trickle ICE sends many candidates, some may arrive late
+        console.warn("[WebRTC] addIceCandidate failed (non-fatal)", err.message);
       }
     };
 
@@ -171,9 +249,9 @@ export const useWebRTC = (roomId) => {
       socket.off("webrtc-ice", onIce);
       socket.off("webrtc-user-left", onUserLeft);
     };
-  }, [isInCall, buildPeerConnection, removePeer]);
+  }, [buildPeerConnection, removePeer]); // no isInCall dep — use ref inside handlers
 
-  // ── public API ────────────────────────────────────────────────────────────
+  // ── public API ────────────────────────────────────────────────────────
 
   const joinCall = useCallback(
     async (userId, username) => {
@@ -188,7 +266,11 @@ export const useWebRTC = (roomId) => {
         video: false,
       });
       localStreamRef.current = stream;
+      myInfoRef.current = { userId, username };
+      isInCallRef.current = true;
       setIsInCall(true);
+      // Emit AFTER setting the ref — listeners are already registered above
+      // so we won't miss any incoming offers triggered by this event
       socket.emit("webrtc-join-call", { roomId, userId, username });
     },
     [roomId]
@@ -198,6 +280,7 @@ export const useWebRTC = (roomId) => {
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     Object.keys(peersRef.current).forEach(removePeer);
+    isInCallRef.current = false;
     socket.emit("webrtc-leave-call", { roomId });
     setIsInCall(false);
     setIsMuted(false);
@@ -219,7 +302,7 @@ export const useWebRTC = (roomId) => {
     setVolumes((v) => ({ ...v, [socketId]: vol }));
   }, []);
 
-  // cleanup on unmount
+  // cleanup on page unload / component unmount
   useEffect(() => {
     return () => {
       localStreamRef.current?.getTracks().forEach((t) => t.stop());

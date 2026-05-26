@@ -75,8 +75,6 @@ const Library = () => {
   };
 
   const createRoomHandler = (url) => {
-    console.log("AA");
-    
     dispatch(createRoom(url)).then((res) => {
       if (res.payload?.success || res.payload?.room) {
         localStorage.setItem('roomId', res.payload?.room?.roomCode);
