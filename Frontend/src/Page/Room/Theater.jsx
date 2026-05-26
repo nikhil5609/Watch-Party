@@ -27,12 +27,30 @@ const Theater = ({ member = [], webrtc }) => {
 
   const videoRef = useRef(null);
   const containerRef = useRef(null);
+  const duckFrameRef = useRef(null); // rAF handle for smooth ducking
   const isHost = user?._id === room?.hostId;
 
   const {
-    isInCall, isMuted, callMembers, volumes,
+    isInCall, isMuted, callMembers, volumes, isSomeoneSpeaking,
     joinCall, leaveCall, toggleMute, setUserVolume,
   } = webrtc;
+
+  // u2500u2500 auto-ducking u2500u2500
+  useEffect(() => {
+    if (!isInCall) return;
+    const video = videoRef.current;
+    if (!video) return;
+    const targetVol = isSomeoneSpeaking ? 0.25 : 1.0;
+    if (duckFrameRef.current) cancelAnimationFrame(duckFrameRef.current);
+    const ramp = () => {
+      const diff = targetVol - video.volume;
+      if (Math.abs(diff) < 0.01) { video.volume = targetVol; return; }
+      video.volume = Math.max(0, Math.min(1, video.volume + diff * 0.12));
+      duckFrameRef.current = requestAnimationFrame(ramp);
+    };
+    duckFrameRef.current = requestAnimationFrame(ramp);
+    return () => { if (duckFrameRef.current) cancelAnimationFrame(duckFrameRef.current); };
+  }, [isSomeoneSpeaking, isInCall]);
 
   // ── call handlers ──────────────────────────────────────────────────────
 
