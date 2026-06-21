@@ -3,12 +3,6 @@ const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
 const { cloudinary } = require('./Cloudinary');
 
-// On Render.com, fluent-ffmpeg automatically detects the global 'ffmpeg' installation.
-// No manual executable path config is required.
-
-/**
- * Optimizes the video structure for fast streaming via web browsers
- */
 const processVideo = (inputPath, outputPath) => {
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
@@ -26,9 +20,6 @@ const processVideo = (inputPath, outputPath) => {
   });
 };
 
-/**
- * Safely removes a file from the Render server disk if it exists
- */
 const deleteFile = (filePath) => {
   if (fs.existsSync(filePath)) {
     fs.unlink(filePath, (err) => {
@@ -41,12 +32,11 @@ const deleteFile = (filePath) => {
   }
 };
 
-/**
- * Core orchestrator to process the video locally on Render and push it to Cloudinary
- */
 const uploadToCloudinary = async (filePath) => {
-  // Generates a unique output name within the current directory context
+  console.log("A3");
+  
   const outputPath = path.join(__dirname, `processed-${Date.now()}.mp4`);
+  console.log("A4",outputPath);
   
   try {
     console.log("Starting video optimization on Render server...");

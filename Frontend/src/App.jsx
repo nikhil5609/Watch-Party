@@ -8,6 +8,7 @@ import Home from './Page/Home/Home'
 import RoomController from "./Page/Room/RoomController"
 import Library from "./Page/Library/Library"
 import Success from './Page/Google/Success'
+import NotFound from "./Page/Not Found/NotFound"
 
 function App() {
   const dispatch = useDispatch();
@@ -24,6 +25,7 @@ function App() {
         <Route path="/success" element={<Success />} />
         <Route path='/room' element={<RoomController />} />
         <Route path="/library" element={<Library />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </>
   )
