@@ -56,7 +56,7 @@ const uploadToCloudinary = async (filePath) => {
       resource_type: "video",
     });
 
-    console.log("Cloudinary upload successful!");
+    console.log("Cloudinary upload successful!",result);
     return result.secure_url;
 
   } catch (err) {

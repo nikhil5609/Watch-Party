@@ -26,7 +26,7 @@ const addMovie = async (req, res) => {
             uploader: uploadedBy,
             ...(thumb && { thumb })
         };
-        console.log("A5");
+        console.log("A5",url);
         
         // 🟢 Save movie
         const movie = await Movie.create(details);
