@@ -34,16 +34,25 @@ const deleteFile = (filePath) => {
 
 const uploadToCloudinary = async (filePath) => {
   console.log("A3");
-  
+
   const outputPath = path.join(__dirname, `processed-${Date.now()}.mp4`);
-  console.log("A4",outputPath);
-  
+  console.log("A4", outputPath);
+
   try {
     console.log("Starting video optimization on Render server...");
     await processVideo(filePath, outputPath);
 
+
+    const stats = fs.statSync(outputPath);
+    console.log(
+      "Processed file size:",
+      (stats.size / (1024 * 1024)).toFixed(2),
+      "MB"
+    );
+
+
     console.log("Uploading optimized file to Cloudinary...");
-    const result = await cloudinary.uploader.upload(outputPath, {
+    const result = await cloudinary.uploader.upload_large(outputPath, {
       resource_type: "video",
     });
 
