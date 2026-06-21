@@ -52,7 +52,7 @@ const uploadToCloudinary = async (filePath) => {
 
 
     console.log("Uploading optimized file to Cloudinary...");
-    const result = await cloudinary.uploader.upload_large(outputPath, {
+    const result = await cloudinary.uploader.upload(outputPath, {
       resource_type: "video",
     });
 
