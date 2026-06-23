@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { createRoom, joinRoom } from '../../Store/room.slice';
 import { useState, useEffect } from 'react';
 import { axiosClient } from '../../Api/api';
+import { log } from 'firebase/firestore/pipelines';
 
 const Main = () => {
   const dispatch = useDispatch();
@@ -172,7 +173,7 @@ const Main = () => {
                       
                       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-end p-5 pb-8 gap-3">
                         <button 
-                          onClick={() => createRoomHandler(movie?.movieUrl)}
+                          onClick={() => createRoomHandler(movie?.movieKey)}
                           className="w-full py-3.5 bg-red-600 text-white rounded-2xl font-black text-[10px] tracking-widest uppercase shadow-xl hover:bg-red-700 transition-colors"
                         >
                           PLAY IN ROOM
@@ -272,7 +273,7 @@ const Main = () => {
                     {movies.map((movie) => (
                       <div 
                         key={movie._id}
-                        onClick={() => createRoomHandler(movie?.movieUrl)}
+                        onClick={() => createRoomHandler(movie?.movieKey)}
                         className="group flex items-center gap-4 p-3 rounded-2xl bg-slate-950/50 border border-white/5 hover:border-red-600/40 hover:bg-slate-900 transition-all cursor-pointer"
                       >
                         <div className="w-14 h-20 bg-slate-900 rounded-xl overflow-hidden flex-shrink-0 border border-white/5">

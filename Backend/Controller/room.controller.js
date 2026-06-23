@@ -1,5 +1,6 @@
 const generateRoomCode = require("../Utils/generate.roomcode");
 const Room = require("../Model/room.model");
+const { generatePresignedUrl } = require("../Utils/tigris");
 
 const getPopulatedRoom = async (roomId) => {
   return await Room.findOne({ roomCode: roomId }).populate(
@@ -14,8 +15,8 @@ const createRoom = async (req, res) => {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const {movieUrl} = req.body
-    if(!movieUrl){
+    const {movieKey} = req.body;
+    if(!movieKey){
       return res.status(400).json({success: false,message: "Movie is not selected"});
     }
     let roomCode;
@@ -25,7 +26,11 @@ const createRoom = async (req, res) => {
       roomCode = generateRoomCode(6);
       exists = await Room.exists({ roomCode });
     } while (exists);
-
+    
+    const movieUrl = await generatePresignedUrl(movieKey)
+    if(!movieUrl) return res.status(400).json({status: "failed",message: "Failed to generate Url"});
+    console.log(movieUrl);
+    
     const room = await Room.create({
       roomCode,
       hostId: req.user._id,
@@ -49,7 +54,7 @@ const createRoom = async (req, res) => {
 const joinRoom = async (req, res) => {
   try {
     const { roomId } = req.body;
-
+    
     if (!roomId) {
       return res.status(400).json({ success: false, message: "Room Id required" });
     }
@@ -57,7 +62,6 @@ const joinRoom = async (req, res) => {
     if (!req.user || !req.user._id) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-
     await Room.updateOne(
       {
         roomCode: roomId,
@@ -73,7 +77,8 @@ const joinRoom = async (req, res) => {
 
     const populatedRoom = await getPopulatedRoom(roomId);
     req.io.to(populatedRoom?.roomCode).emit("room-updated", populatedRoom);
-
+    console.log("Populated Room",populatedRoom);
+    
     return res.status(200).json({
       success: true,
       message: "Joined room successfully",

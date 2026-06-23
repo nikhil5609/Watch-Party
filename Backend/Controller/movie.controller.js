@@ -1,10 +1,8 @@
 const Movie = require("../Model/movie.model");
-const { uploadToCloudinary } = require("../Utils/Upload");
+const {  uploadVideo } = require("../Utils/Upload");
 
 const addMovie = async (req, res) => {
     try {
-        console.log("A1");
-        
         const { movieName, thumb } = req.body;
         const uploadedBy = req?.user?._id;
         const filePath = req?.file?.path
@@ -16,22 +14,21 @@ const addMovie = async (req, res) => {
                 message: "Movie details are incomplete"
             });
         }
-        console.log("A2");
         
         // 🟢 Create movie payload
-        const url = await uploadToCloudinary(filePath);
+        const videoKey = await uploadVideo(filePath);
+        if(!videoKey) return res.status(400).json({
+            status: "failed",
+            message: "Upload Failed"
+        })
         const details = {
             movieName,
-            movieUrl: url,
+            movieKey: videoKey,
             uploader: uploadedBy,
             ...(thumb && { thumb })
         };
-        console.log("A5",url);
-        
         // 🟢 Save movie
         const movie = await Movie.create(details);
-        console.log("A6");
-        
         if (!movie) {
             return res.status(500).json({
                 status: "failed",
@@ -39,11 +36,9 @@ const addMovie = async (req, res) => {
             });
         }
         
-        console.log("A7");
         const allMovies = await Movie.find()
         .populate('uploader', 'username');
         
-        console.log("A8");
         return res.status(201).json({
             status: "success",
             message: "Movie uploaded successfully",

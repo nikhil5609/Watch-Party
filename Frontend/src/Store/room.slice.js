@@ -13,13 +13,17 @@ const initialState = {
 
 export const createRoom = createAsyncThunk(
   "room/create",
-  async (movieUrl, thunkAPI) => {
+  async (movieKey, thunkAPI) => {
     try {
+      console.log(movieKey);
+      
       const res = await axiosClient.post(
         "/room/create",
-        {movieUrl},
+        {movieKey},
         { withCredentials: true }
       );
+      console.log(res.data);
+      
       return res.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(
@@ -38,6 +42,8 @@ export const joinRoom = createAsyncThunk(
         { roomId },
         { withCredentials: true }
       );
+      console.log(res.data);
+      
       return res.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(

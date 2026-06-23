@@ -7,7 +7,7 @@ const movieSchema = new Schema({
         type: String,
         default: "Unknown"
     },
-    movieUrl: {
+    movieKey: {
         type: String,
         required: true,
     },

@@ -187,7 +187,7 @@ const MovieCard = ({ movie , createRoomHandler }) => (
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-6 gap-3">
           <button 
-            onClick={() => createRoomHandler(movie.movieUrl)}
+            onClick={() => createRoomHandler(movie.movieKey)}
             className="bg-red-600 text-white w-full py-3 rounded-xl font-black text-[10px] tracking-widest flex items-center justify-center gap-2 hover:bg-red-700"
           >
              <Play size={14} fill="currentColor" /> WATCH NOW
