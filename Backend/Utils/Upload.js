@@ -28,7 +28,7 @@ const deleteFile = (filePath) => {
 
 const uploadVideo = async (filePath) => {
   const fileName = `${Date.now()}.mp4`;
-  const videoKey = `videos/${fileName}`;
+  const videoKey = fileName;
   const outputPath = path.join(path.dirname(filePath), `processed-${fileName}`);
 
   try {
