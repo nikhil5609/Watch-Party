@@ -6,7 +6,14 @@ const multer = require('multer');
 const movieRouter = express.Router();
 
 // multer config
-const upload = multer({ dest: "uploads/" });
+const upload = multer({
+    storage: multer.diskStorage({
+        destination: "./uploads",
+        filename: (req, file, cb) => {
+            cb(null, file.originalname);
+        }
+    })
+});
 
 movieRouter
     .post('/add',verifyToken,upload.single("video"),addMovie)

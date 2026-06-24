@@ -61,7 +61,6 @@ const processMicStream = async (rawStream) => {
 
     const source = ctx.createMediaStreamSource(rawStream)
 
-    // High-pass: fan rumble cut karo
     const highPass = ctx.createBiquadFilter()
     highPass.type = 'highpass'
     highPass.frequency.value = 150
@@ -72,7 +71,6 @@ const processMicStream = async (rawStream) => {
       maxChannels: 1,
     })
 
-    // Compressor: voice even karo
     const compressor = ctx.createDynamicsCompressor()
     compressor.threshold.value = -24
     compressor.knee.value = 10
@@ -127,7 +125,6 @@ export const useWebRTC = (roomId) => {
 
   const buildPeerConnection = useCallback(
     (socketId) => {
-      // Prevent stale duplication on fast reconnections
       if (peersRef.current[socketId]) {
         removePeer(socketId);
       }
@@ -135,7 +132,6 @@ export const useWebRTC = (roomId) => {
       const ICE_CONFIG = buildIceServers();
       const pc = new RTCPeerConnection(ICE_CONFIG);
 
-      // Attach processed studio quality track to peer context
       localStreamRef.current
         ?.getTracks()
         .forEach((t) => pc.addTrack(t, localStreamRef.current));
@@ -177,7 +173,6 @@ export const useWebRTC = (roomId) => {
     [removePeer]
   );
 
-  // ── signaling subsystem ─────────────────────────────────────────────────
   useEffect(() => {
     const onUserJoined = async ({ socketId, userId, username }) => {
       if (!isInCallRef.current) return;
@@ -193,7 +188,6 @@ export const useWebRTC = (roomId) => {
           voiceActivityDetection: true,
         });
         
-        // Munge configuration before applying local descriptors
         offer.sdp = optimizeAudioSDP(offer.sdp);
         await pc.setLocalDescription(offer);
         
@@ -220,7 +214,6 @@ export const useWebRTC = (roomId) => {
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await pc.createAnswer();
         
-        // Munge optimization details onto incoming calls
         answer.sdp = optimizeAudioSDP(answer.sdp);
         await pc.setLocalDescription(answer);
         
@@ -272,7 +265,6 @@ export const useWebRTC = (roomId) => {
     };
   }, [buildPeerConnection, removePeer]);
 
-  // ── public API ────────────────────────────────────────────────────────
 
   const joinCall = useCallback(
     async (userId, username) => {
@@ -287,7 +279,6 @@ export const useWebRTC = (roomId) => {
         video: false,
       });
 
-      // Pipeline deployment
       const { processedStream, audioCtx } = await processMicStream(rawStream);
       
       rawStreamRef.current = rawStream;

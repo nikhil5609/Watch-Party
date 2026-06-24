@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export const axiosClient = axios.create({
-  baseURL: "https://watch-party-backend-ry0f.onrender.com",
+  baseURL: "http://localhost:3300",
   withCredentials: true,
   headers: {
     Accept: "application/json",
