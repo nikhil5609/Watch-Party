@@ -26,7 +26,7 @@ app.use(cookieParser());
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "https://watch-party-frontend-ovmj.onrender.com",
+    origin: "http://localhost:5173",
     credentials: true,
   }
 });
@@ -38,7 +38,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
-app.use(cors({ origin: "https://watch-party-frontend-ovmj.onrender.com", credentials: true }));
+app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 app.use(morgan("dev"));
 app.use(passport.initialize());
 

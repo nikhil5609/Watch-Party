@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { socket } from "../socket";
+import { SpeexWorkletNode, loadSpeex } from '@sapphi-red/web-noise-suppressor'
+import speexWorkletPath from '@sapphi-red/web-noise-suppressor/speexWorklet.js?url'
+import speexWasmPath from '@sapphi-red/web-noise-suppressor/speex.wasm?url'
 
 // ─── ICE config ───────────────────────────────────────────────────────────────
 const buildIceServers = () => {
@@ -49,38 +52,44 @@ const optimizeAudioSDP = (sdp) => {
 // ─── Lightweight DSP Processor ──────────────────────────────────────────────
 const processMicStream = async (rawStream) => {
   try {
-    const ctx = new AudioContext({ sampleRate: 48000 });
-    if (ctx.state === "suspended") {
-      await ctx.resume();
-    }
+    const ctx = new AudioContext({ sampleRate: 48000 })
+    if (ctx.state === 'suspended') await ctx.resume()
 
-    const source = ctx.createMediaStreamSource(rawStream);
+    // Speex wasm load karo
+    const speexWasmBinary = await loadSpeex({ url: speexWasmPath })
+    await ctx.audioWorklet.addModule(speexWorkletPath)
 
-    // High-pass filter: Cuts out AC hums and low fan vibration below 80Hz
-    const highPass = ctx.createBiquadFilter();
-    highPass.type = "highpass";
-    highPass.frequency.value = 80;
+    const source = ctx.createMediaStreamSource(rawStream)
 
-    // Dynamics Compressor: Levels loud spikes and subtly bumps up quiet talkers
-    const compressor = ctx.createDynamicsCompressor();
-    compressor.threshold.value = -24;
-    compressor.knee.value = 30;
-    compressor.ratio.value = 3; 
-    compressor.attack.value = 0.005;
-    compressor.release.value = 0.20;
+    // High-pass: fan rumble cut karo
+    const highPass = ctx.createBiquadFilter()
+    highPass.type = 'highpass'
+    highPass.frequency.value = 150
 
-    const dest = ctx.createMediaStreamDestination();
+    // Speex AI denoiser: fan/cooler/air noise yahan remove hogi
+    const speex = new SpeexWorkletNode(ctx, {
+      wasmBinary: speexWasmBinary,
+      maxChannels: 1,
+    })
 
-    source.connect(highPass);
-    highPass.connect(compressor);
-    compressor.connect(dest);
+    // Compressor: voice even karo
+    const compressor = ctx.createDynamicsCompressor()
+    compressor.threshold.value = -24
+    compressor.knee.value = 10
+    compressor.ratio.value = 2
+    compressor.attack.value = 0.005
+    compressor.release.value = 0.35
 
-    return { processedStream: dest.stream, audioCtx: ctx };
+    const dest = ctx.createMediaStreamDestination()
+
+    source.connect(highPass).connect(speex).connect(compressor).connect(dest)
+
+    return { processedStream: dest.stream, audioCtx: ctx }
   } catch (e) {
-    console.warn("[WebRTC] Fallback to raw stream due to context restriction:", e);
-    return { processedStream: rawStream, audioCtx: null };
+    console.warn('[WebRTC] Fallback to raw stream:', e)
+    return { processedStream: rawStream, audioCtx: null }
   }
-};
+}
 
 export const useWebRTC = (roomId) => {
   const [isInCall, setIsInCall] = useState(false);

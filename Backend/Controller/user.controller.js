@@ -137,10 +137,10 @@ const googleCallback = async (req, res) => {
     );
     res.cookie("token", token, cookieOptions);
   
-    return res.redirect(`https://watch-party-frontend-ovmj.onrender.com/success?token=${token}`);
+    return res.redirect(`http://localhost:5173/success?token=${token}`);
   } catch (error) {
     console.error("Google Auth Callback Error:", error);
-    return res.redirect("https://watch-party-frontend-ovmj.onrender.com/login");
+    return res.redirect("http://localhost:5173/login");
   }
 };
 
