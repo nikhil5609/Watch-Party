@@ -4,14 +4,14 @@ const fs = require('fs');
 
 const tigrisClient = new S3Client({
   region: 'auto',
-  endpoint: 'https://t3.storage.dev',
+  endpoint: process.env.TIGRIS_STORAGE_ENDPOINT,
   credentials: {
-    accessKeyId: "tid_XgIXYXpbDYeBgQrQHTj_bwqZUkBbdZsFyQIctKrAEJHSZWhwWX",
-    secretAccessKey: "tsec_RCyqe6gB2Uu7Y-3Ajq9zClYsiIZJ4gVgdRbemqi1kQFVJv-kGXoNs_wPYYxcSFTOApNCDR",
+    accessKeyId: process.env.TIGRIS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.TIGRIS_SECRET_ACCESS_KEY,
   },
 });
 
-const BUCKET_NAME = "cinesync";
+const BUCKET_NAME = process.env.TIGRIS_BUCKET_NAME;
 
 const uploadToTigrisStorage = async (filePath, fileName) => {
   const fileStream = fs.createReadStream(filePath);
