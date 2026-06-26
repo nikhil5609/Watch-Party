@@ -6,13 +6,7 @@ ffmpeg.setFfmpegPath(ffmpegStatic);
 const { uploadToTigrisStorage, generatePresignedUrl } = require('./tigris');
 
 const processVideo = (inputPath, outputPath) => {
-  const mem = process.memoryUsage();
   return new Promise((resolve, reject) => {
-
-    console.log({
-      rss: Math.round(mem.rss / 1024 / 1024) + " MB",
-      heapUsed: Math.round(mem.heapUsed / 1024 / 1024) + " MB",
-    });
     ffmpeg(inputPath)
       .outputOptions('-movflags +faststart')
       .videoCodec('copy')

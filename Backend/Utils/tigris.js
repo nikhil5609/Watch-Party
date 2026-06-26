@@ -1,15 +1,8 @@
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const {  PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const fs = require('fs');
+const {tigrisClient} = require('./tigrisClient')
 
-const tigrisClient = new S3Client({
-  region: 'auto',
-  endpoint: process.env.TIGRIS_STORAGE_ENDPOINT,
-  credentials: {
-    accessKeyId: process.env.TIGRIS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.TIGRIS_SECRET_ACCESS_KEY,
-  },
-});
 
 const BUCKET_NAME = process.env.TIGRIS_BUCKET_NAME;
 

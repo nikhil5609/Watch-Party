@@ -1,4 +1,5 @@
 const Movie = require("../Model/movie.model");
+const { deleteFromTigris } = require("../Utils/deleteFromTigris");
 const {  uploadVideo } = require("../Utils/Upload");
 
 const addMovie = async (req, res) => {
@@ -74,7 +75,7 @@ const deleteMovie = async (req, res) => {
   try {
     const { movieId } = req.params;
     const userId = req.user._id;
- 
+    
     const movie = await Movie.findById(movieId);
  
     if (!movie) {
@@ -85,6 +86,10 @@ const deleteMovie = async (req, res) => {
     if (movie.uploader.toString() !== userId.toString()) {
       return res.status(403).json({ status: "failed", message: "Not authorized to delete this movie" });
     }
+
+    const temp = await deleteFromTigris(movie?.movieKey);
+    console.log(temp);
+    
  
     await Movie.findByIdAndDelete(movieId);
  
