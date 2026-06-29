@@ -15,7 +15,9 @@ const createRoom = async (req, res) => {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const {movieKey} = req.body;
+    const {movieKey,movieTitle} = req.body;
+    console.log(req.body);
+    
     if(!movieKey){
       return res.status(400).json({success: false,message: "Movie is not selected"});
     }
@@ -26,16 +28,17 @@ const createRoom = async (req, res) => {
       roomCode = generateRoomCode(6);
       exists = await Room.exists({ roomCode });
     } while (exists);
+
     
     const movieUrl = await generatePresignedUrl(movieKey)
     if(!movieUrl) return res.status(400).json({status: "failed",message: "Failed to generate Url"});
-    console.log(movieUrl);
     
     const room = await Room.create({
       roomCode,
       hostId: req.user._id,
       video: movieUrl,
-      members: [{ userId: req.user._id, fileVerified: false }]
+      videoTitle: movieTitle,
+      members: [{ userId: req.user._id}]
     });
 
     const populatedRoom = await getPopulatedRoom(roomCode);

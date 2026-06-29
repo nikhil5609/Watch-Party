@@ -95,7 +95,7 @@ const logoutUser = async (req, res) => {
       authHeader?.startsWith('Bearer ')
         ? authHeader.split(' ')[1]
         : req.cookies?.token;
-        
+
     if (!token) {
       return res.status(400).json({ error: "Token missing" });
     }
@@ -131,13 +131,19 @@ const deleteUser = async (req, res) => {
 const googleCallback = async (req, res) => {
   try {
     const token = jwt.sign(
-      { _id : req.user._id, email: req.user.email },
+      { _id: req.user._id, email: req.user.email },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
     res.cookie("token", token, cookieOptions);
-  
-    return res.redirect(`https://watch-party-frontend-ovmj.onrender.com/success?token=${token}`);
+
+    const redirect = req.query.state
+      ? decodeURIComponent(req.query.state)
+      : '/';
+      
+    res.redirect(
+      `https://watch-party-frontend-ovmj.onrender.com/success?token=${token}&redirect=${encodeURIComponent(redirect)}`
+    );
   } catch (error) {
     console.error("Google Auth Callback Error:", error);
     return res.redirect("https://watch-party-frontend-ovmj.onrender.com/login");
@@ -147,7 +153,7 @@ const googleCallback = async (req, res) => {
 module.exports = {
   createUser,
   loginUser,
-  logoutUser, 
+  logoutUser,
   deleteUser,
   googleCallback,
 };

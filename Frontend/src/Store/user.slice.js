@@ -4,13 +4,10 @@ import { axiosClient } from "../Api/api";
 const initialState = {
   user: null,
   loggedIn: false,
-  loading: false,
+  loading: true,
   error: null,
 };
 
-/* =======================
-   ASYNC THUNKS
-======================= */
 
 // Signup
 export const createUser = createAsyncThunk(
@@ -87,10 +84,6 @@ export const verifyUser = createAsyncThunk(
   }
 );
 
-
-/* =======================
-   SLICE
-======================= */
 
 export const userSlice = createSlice({
   name: "user",

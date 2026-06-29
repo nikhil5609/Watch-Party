@@ -36,7 +36,10 @@ const roomSchema = new Schema(
       type: String,
       default: null,
     },
-
+    videoTitle:{
+      type: String,
+      default: "CineSync"
+    },
     members: {
       type: [memberSchema],
       default: [],

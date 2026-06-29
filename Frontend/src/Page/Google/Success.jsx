@@ -10,16 +10,15 @@ const Success = () => {
 
   useEffect(() => {
     const token = searchParams.get('token');
-
+    const redirectTo = searchParams.get('redirect') || '/';
     if (token) {
-      // 1. Save the token immediately so the Axios interceptor grabs it
       localStorage.setItem('token', token);
       
-      // 2. Dispatch verifyUser to update the global Redux state
       dispatch(verifyUser())
         .unwrap()
         .then(() => {
-          navigate('/'); // Send them to the dashboard/homepage
+            sessionStorage.removeItem('redirectAfterLogin'); // 👈 clean up
+            navigate(redirectTo, { replace: true });
         })
         .catch((err) => {
           console.error("Verification failed:", err);

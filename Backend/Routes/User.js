@@ -22,10 +22,14 @@ userRouter.post('/logout', logoutUser);
 userRouter.delete('/delete', verifyToken, deleteUser);
 
 /* -------------- GOOGLE AUTH ------------- */
-userRouter.get(
-  '/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
-);
+userRouter.get('/google', (req, res, next) => {
+  const redirect = req.query.redirect || '/';
+  
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    state: encodeURIComponent(redirect)
+  })(req, res, next);
+});
 
 userRouter.get(
   '/google/callback',

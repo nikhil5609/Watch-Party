@@ -13,13 +13,11 @@ const initialState = {
 
 export const createRoom = createAsyncThunk(
   "room/create",
-  async (movieKey, thunkAPI) => {
+  async ({movieKey,movieTitle}, thunkAPI) => {
     try {
-      console.log(movieKey);
-      
       const res = await axiosClient.post(
         "/room/create",
-        {movieKey},
+        {movieKey,movieTitle},
         { withCredentials: true }
       );
       console.log(res.data);
@@ -42,7 +40,6 @@ export const joinRoom = createAsyncThunk(
         { roomId },
         { withCredentials: true }
       );
-      console.log(res.data);
       
       return res.data;
     } catch (error) {

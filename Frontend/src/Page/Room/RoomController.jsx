@@ -2,7 +2,7 @@ import Theater from "./Theater";
 import { useDispatch, useSelector } from "react-redux";
 import { useEffect, useRef, useState } from "react";
 import { socket } from "../../socket";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { joinRoom, setRoom } from "../../Store/room.slice";
 import { useGetLiveUser } from "../../Hooks/getLiveUser";
 import { useWebRTC } from "../../Hooks/useWebRTC";
@@ -13,15 +13,16 @@ const RoomController = () => {
   const navigate = useNavigate();
   const { room } = useSelector((state) => state.room);
   const { user } = useSelector((state) => state.user);
-
+  const { roomCode } = useParams();
+  
   const [notifications, setNotifications] = useState([]);
 
   const joinedRef = useRef(false);
   const membersRef = useRef([]);
+  
 
   const onlineMembers = useGetLiveUser();
 
-  // WebRTC mesh audio
   const webrtc = useWebRTC(room?.roomCode);
 
   useEffect(() => {
@@ -49,7 +50,7 @@ const RoomController = () => {
     });
 
     return () => {
-      // Leave call if active before disconnecting
+      
       if (webrtc.isInCall) webrtc.leaveCall();
       socket.disconnect();
     };
@@ -94,7 +95,7 @@ const RoomController = () => {
   useEffect(() => {
     const restoreRoom = async () => {
       if (!room) {
-        const roomId = localStorage.getItem("roomId");
+        const roomId = roomCode || localStorage.getItem("roomId");
         if (!roomId) {
           navigate("/");
           return;

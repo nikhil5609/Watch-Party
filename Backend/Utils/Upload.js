@@ -11,6 +11,7 @@ const processVideo = (inputPath, outputPath) => {
       .outputOptions('-movflags +faststart')
       .videoCodec('copy')
       .audioCodec('copy')
+      .outputOptions('-preset ultrafast')
       .on('end', () => resolve(outputPath))
       .on('error', (err) => reject(err))
       .save(outputPath);
@@ -42,7 +43,7 @@ const uploadVideo = async (filePath) => {
     await uploadToTigrisStorage(outputPath, fileName);
     console.log("Upload successful! Key:", videoKey);
 
-
+    
     return videoKey;
 
   } catch (err) {

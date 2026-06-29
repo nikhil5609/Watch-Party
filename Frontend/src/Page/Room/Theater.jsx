@@ -1,33 +1,70 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
-  Play, Pause, Maximize,
+  Play, Pause, Maximize, Minimize,
   LogOut, Shield, Rewind, FastForward, Copy, Check, Users,
-  Mic, MicOff, PhoneCall, PhoneOff, Volume2, VolumeX,
+  Mic, MicOff, PhoneCall, PhoneOff, Volume2, VolumeX, Volume1,
 } from "lucide-react";
 import { socket } from "../../socket";
 import { clearRoomState } from "../../Store/room.slice";
 
+// ── tiny helpers ────────────────────────────────────────────────────────────
+const fmt = (t) => {
+  if (isNaN(t)) return "0:00";
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+};
+
+const Avatar = ({ name = "?", size = 36, ring = false }) => (
+  <div
+    style={{
+      width: size, height: size, borderRadius: "50%",
+      background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: size * 0.38, fontWeight: 700, color: "#fff",
+      border: ring ? "2px solid #000" : "none",
+      flexShrink: 0,
+    }}
+  >
+    {name.charAt(0).toUpperCase()}
+  </div>
+);
+
+// ── volume icon picker ───────────────────────────────────────────────────────
+const VolIcon = ({ v, size = 18 }) => {
+  if (v === 0) return <VolumeX size={size} />;
+  if (v < 0.5) return <Volume1 size={size} />;
+  return <Volume2 size={size} />;
+};
+
+// ── main component ───────────────────────────────────────────────────────────
 const Theater = ({ member = [], webrtc }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const { room } = useSelector((state) => state.room);
-  const { user } = useSelector((state) => state.user);
+  const { room } = useSelector((s) => s.room);
+  const { user }  = useSelector((s) => s.user);
 
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [showMembers, setShowMembers] = useState(false);
-  const [hoverControls, setHoverControls] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [copied, setCopied] = useState(false);
-  const [micError, setMicError] = useState(null);
+  // ui state
+  const [isPlaying,    setIsPlaying]    = useState(false);
+  const [showMembers,  setShowMembers]  = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [progress,     setProgress]     = useState(0);
+  const [duration,     setDuration]     = useState(0);
+  const [currentTime,  setCurrentTime]  = useState(0);
+  const [copied,       setCopied]       = useState(false);
+  const [micError,     setMicError]     = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [movieVol,     setMovieVol]     = useState(1);
+  const [movieMuted,   setMovieMuted]   = useState(false);
+  const [isMobile,     setIsMobile]     = useState(false);
 
-  const videoRef = useRef(null);
-  const containerRef = useRef(null);
-  const duckFrameRef = useRef(null); // rAF handle for smooth ducking
+  const videoRef      = useRef(null);
+  const containerRef  = useRef(null);
+  const duckFrameRef  = useRef(null);
+  const hideTimerRef  = useRef(null);
   const isHost = user?._id === room?.hostId;
 
   const {
@@ -35,48 +72,94 @@ const Theater = ({ member = [], webrtc }) => {
     joinCall, leaveCall, toggleMute, setUserVolume,
   } = webrtc;
 
-  // u2500u2500 auto-ducking u2500u2500
+  // ── mobile detect ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // ── auto-hide controls ─────────────────────────────────────────────────────
+  const resetHideTimer = useCallback(() => {
+    setShowControls(true);
+    clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => setShowControls(false), 3500);
+  }, []);
+
+  useEffect(() => {
+    resetHideTimer();
+    return () => clearTimeout(hideTimerRef.current);
+  }, []);
+
+  // ── keyboard shortcuts ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      resetHideTimer();
+      if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        if (!document.fullscreenElement) {
+          containerRef.current?.requestFullscreen();
+        } else {
+          document.exitFullscreen();
+        }
+      }
+      if (e.key === " ") { e.preventDefault(); togglePlay(); }
+      if (e.key === "ArrowLeft")  { if (isHost && videoRef.current) videoRef.current.currentTime -= 10; }
+      if (e.key === "ArrowRight") { if (isHost && videoRef.current) videoRef.current.currentTime += 10; }
+      if (e.key === "m" || e.key === "M") {
+        setMovieMuted((p) => !p);
+        if (videoRef.current) videoRef.current.muted = !videoRef.current.muted;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isHost]);
+
+  // ── fullscreen change listener ─────────────────────────────────────────────
+  useEffect(() => {
+    const onFs = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  // ── audio ducking ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isInCall) return;
     const video = videoRef.current;
     if (!video) return;
-    const targetVol = isSomeoneSpeaking ? 0.25 : 1.0;
+    const target = isSomeoneSpeaking ? 0.25 : movieVol;
     if (duckFrameRef.current) cancelAnimationFrame(duckFrameRef.current);
     const ramp = () => {
-      const diff = targetVol - video.volume;
-      if (Math.abs(diff) < 0.01) { video.volume = targetVol; return; }
+      const diff = target - video.volume;
+      if (Math.abs(diff) < 0.01) { video.volume = target; return; }
       video.volume = Math.max(0, Math.min(1, video.volume + diff * 0.12));
       duckFrameRef.current = requestAnimationFrame(ramp);
     };
     duckFrameRef.current = requestAnimationFrame(ramp);
     return () => { if (duckFrameRef.current) cancelAnimationFrame(duckFrameRef.current); };
-  }, [isSomeoneSpeaking, isInCall]);
+  }, [isSomeoneSpeaking, isInCall, movieVol]);
 
-  // ── call handlers ──────────────────────────────────────────────────────
+  // ── apply movie volume to video element ───────────────────────────────────
+  useEffect(() => {
+    if (!videoRef.current) return;
+    videoRef.current.volume = movieMuted ? 0 : movieVol;
+    videoRef.current.muted  = movieMuted;
+  }, [movieVol, movieMuted]);
 
+  // ── call handlers ──────────────────────────────────────────────────────────
   const handleJoinCall = async () => {
     setMicError(null);
-    try {
-      await joinCall(user._id, user.username);
-    } catch (err) {
-      setMicError("Microphone access denied. Please allow mic in browser settings.");
-      setTimeout(() => setMicError(null), 5000);
-    }
+    try { await joinCall(user._id, user.username); }
+    catch { setMicError("Mic access denied — check browser settings."); setTimeout(() => setMicError(null), 5000); }
   };
 
-  // ── video helpers ──────────────────────────────────────────────────────
-
+  // ── video helpers ──────────────────────────────────────────────────────────
   const copyRoomCode = () => {
     navigator.clipboard.writeText(room?.roomCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const formatTime = (time) => {
-    if (isNaN(time)) return "00:00";
-    const mins = Math.floor(time / 60);
-    const secs = Math.floor(time % 60);
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
   const togglePlay = () => {
@@ -84,34 +167,25 @@ const Theater = ({ member = [], webrtc }) => {
     if (!isHost || !video) return;
     const state = video.paused ? "play" : "pause";
     socket.emit("toggle-play", { state, current_time: video.currentTime });
-    if (state === "play") {
-      video.play().catch(() => {});
-      setIsPlaying(true);
-    } else {
-      video.pause();
-      setIsPlaying(false);
-    }
+    if (state === "play") { video.play().catch(() => {}); setIsPlaying(true); }
+    else                  { video.pause(); setIsPlaying(false); }
   };
 
   const handleSeek = (e) => {
     const video = videoRef.current;
     if (!isHost || !video) return;
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect   = e.currentTarget.getBoundingClientRect();
     const newTime = ((e.clientX - rect.left) / rect.width) * video.duration;
     video.currentTime = newTime;
-    socket.emit("toggle-play", {
-      state: video.paused ? "pause" : "play",
-      current_time: newTime,
-    });
+    socket.emit("toggle-play", { state: video.paused ? "pause" : "play", current_time: newTime });
   };
 
   const handleTimer = (time) => {
     const video = videoRef.current;
     if (!video) return;
     const diff = video.currentTime - time;
-    if (Math.abs(diff) > 2) {
-      video.currentTime = time;
-    } else if (Math.abs(diff) > 0.25) {
+    if (Math.abs(diff) > 2) { video.currentTime = time; }
+    else if (Math.abs(diff) > 0.25) {
       video.playbackRate = diff > 0 ? 0.95 : 1.1;
       setTimeout(() => { video.playbackRate = 1; }, 1000);
     }
@@ -122,58 +196,41 @@ const Theater = ({ member = [], webrtc }) => {
     const video = videoRef.current;
     if (!video) return;
     if (data.state === "play") {
-      if (video.paused) {
-        video.muted = true;
-        video.play().then(() => { video.muted = false; }).catch(() => {});
-        setIsPlaying(true);
-      }
+      if (video.paused) { video.muted = true; video.play().then(() => { video.muted = false; }).catch(() => {}); setIsPlaying(true); }
     } else if (data.state === "pause") {
-      if (!video.paused) {
-        video.pause();
-        setIsPlaying(false);
-      }
+      if (!video.paused) { video.pause(); setIsPlaying(false); }
     }
     handleTimer(data.current_time);
   };
 
   useEffect(() => {
-    const handler = (data) => handleSyncRef.current(data);
-    socket.on("control", handler);
-    socket.emit("request-sync");
-    return () => socket.off("control", handler);
+    const h = (d) => handleSyncRef.current(d);
+    socket.on("control", h); socket.emit("request-sync");
+    return () => socket.off("control", h);
   }, []);
 
   useEffect(() => {
-    const handler = (data) => handleSyncRef.current(data);
-    socket.on("get-time", handler);
-    return () => socket.off("get-time", handler);
+    const h = (d) => handleSyncRef.current(d);
+    socket.on("get-time", h);
+    return () => socket.off("get-time", h);
   }, []);
 
   useEffect(() => {
-    const videoEl = videoRef.current;
-    if (!videoEl) return;
-    const onTimeUpdate = () => {
-      setCurrentTime(videoEl.currentTime);
-      setProgress((videoEl.currentTime / videoEl.duration) * 100);
-    };
-    const onMeta = () => setDuration(videoEl.duration);
-    videoEl.addEventListener("timeupdate", onTimeUpdate);
-    videoEl.addEventListener("loadedmetadata", onMeta);
-    return () => {
-      videoEl.removeEventListener("timeupdate", onTimeUpdate);
-      videoEl.removeEventListener("loadedmetadata", onMeta);
-    };
+    const el = videoRef.current;
+    if (!el) return;
+    const onTime = () => { setCurrentTime(el.currentTime); setProgress((el.currentTime / el.duration) * 100); };
+    const onMeta = () => setDuration(el.duration);
+    el.addEventListener("timeupdate", onTime);
+    el.addEventListener("loadedmetadata", onMeta);
+    return () => { el.removeEventListener("timeupdate", onTime); el.removeEventListener("loadedmetadata", onMeta); };
   }, []);
 
   useEffect(() => {
     if (!isHost) return;
-    const interval = setInterval(() => {
-      socket.emit("time-stamp", {
-        roomId: room?.roomCode,
-        current_time: videoRef.current?.currentTime,
-      });
+    const id = setInterval(() => {
+      socket.emit("time-stamp", { roomId: room?.roomCode, current_time: videoRef.current?.currentTime });
     }, 2500);
-    return () => clearInterval(interval);
+    return () => clearInterval(id);
   }, [isHost, room?.roomCode]);
 
   const leaveRoom = () => {
@@ -185,337 +242,604 @@ const Theater = ({ member = [], webrtc }) => {
     dispatch(clearRoomState());
   };
 
-  // ── render ─────────────────────────────────────────────────────────────
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) containerRef.current?.requestFullscreen();
+    else document.exitFullscreen();
+  };
 
+  // ── render ─────────────────────────────────────────────────────────────────
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 bg-black flex items-center justify-center text-white overflow-hidden select-none font-sans"
-      onMouseMove={() => {
-        setHoverControls(true);
-        clearTimeout(window.controlTimer);
-        window.controlTimer = setTimeout(() => setHoverControls(false), 3000);
-      }}
+      className="theater-root"
+      onMouseMove={resetHideTimer}
+      onTouchStart={resetHideTimer}
+      onClick={() => { if (showMembers) setShowMembers(false); }}
     >
+
       {/* VIDEO */}
       <video
         ref={videoRef}
         src={room?.video}
-        className="w-full h-full object-contain"
+        className="theater-video"
         onClick={togglePlay}
+        playsInline
       />
 
       {/* TOP BAR */}
-      <div
-        className={`absolute top-0 inset-x-0 p-8 flex justify-between items-start bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-700 ${
-          hoverControls ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-      >
-        <div className="space-y-1">
-          <h1 className="text-2xl font-medium tracking-tight text-white/90">
-            {room?.video?.name || "Untitled Cinema"}
-          </h1>
-          <button
-            onClick={copyRoomCode}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95"
-          >
-            <span className="text-xs font-mono text-slate-400 uppercase tracking-widest">
-              {room?.roomCode}
-            </span>
-            {copied ? (
-              <Check size={14} className="text-emerald-400" />
-            ) : (
-              <Copy size={14} className="text-slate-500" />
-            )}
+      <div className={`theater-top ${showControls ? "vis" : "hid"}`}>
+        <div className="top-left">
+          <span className="movie-title">{room?.videoTitle || "Cinema Room"}</span>
+          <button className="room-code-btn" onClick={copyRoomCode}>
+            <span className="mono">{room?.roomCode}</span>
+            {copied ? <Check size={13} className="icon-success" /> : <Copy size={13} className="icon-muted" />}
           </button>
         </div>
 
-        <div className="flex items-center gap-3 bg-black/20 backdrop-blur-xl p-2 rounded-2xl border border-white/5">
-          {/* call member avatars */}
+        <div className="top-right">
           {callMembers.length > 0 && (
-            <div className="flex items-center gap-1 px-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs text-emerald-400 font-medium">
-                {callMembers.length + 1} in call
-              </span>
+            <div className="call-pill">
+              <span className="call-dot" />
+              <span>{callMembers.length + 1} in call</span>
             </div>
           )}
-          <div className="flex -space-x-2">
-            {member.slice(0, 3).map((m, i) => (
-              <div
-                key={i}
-                className="w-9 h-9 rounded-full border-2 border-black bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-xs font-bold uppercase shadow-xl"
-              >
-                {m.userId.username.charAt(0)}
-              </div>
+          <div className="avatar-stack">
+            {member.slice(0, isMobile ? 2 : 4).map((m, i) => (
+              <Avatar key={i} name={m.userId.username} size={isMobile ? 30 : 34} ring />
             ))}
-            {member.length > 3 && (
-              <div className="w-9 h-9 rounded-full border-2 border-black bg-slate-800 flex items-center justify-center text-xs font-bold">
-                +{member.length - 3}
-              </div>
+            {member.length > (isMobile ? 2 : 4) && (
+              <div className="avatar-more">+{member.length - (isMobile ? 2 : 4)}</div>
             )}
           </div>
           <button
-            onClick={() => setShowMembers(!showMembers)}
-            className={`p-2 rounded-xl transition-colors ${
-              showMembers ? "bg-white text-black" : "hover:bg-white/10"
-            }`}
+            className={`icon-btn ${showMembers ? "active" : ""}`}
+            onClick={(e) => { e.stopPropagation(); setShowMembers((p) => !p); }}
+            aria-label="Toggle member list"
           >
-            <Users size={20} />
+            <Users size={isMobile ? 17 : 19} />
           </button>
         </div>
       </div>
 
-      {/* SIDEBAR: member list + volume controls */}
-      <aside
-        className={`absolute right-6 top-24 bottom-24 z-[60] w-72 bg-slate-900/40 backdrop-blur-2xl rounded-3xl border border-white/10 transition-all duration-500 shadow-2xl ${
-          showMembers
-            ? "translate-x-0 opacity-100"
-            : "translate-x-12 opacity-0 pointer-events-none"
-        }`}
-      >
-        <div className="p-6 flex flex-col h-full gap-4">
-          {/* Audience */}
-          <div className="flex flex-col flex-1 min-h-0">
-            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 mb-3 flex items-center gap-2">
-              <Shield size={14} /> Audience
-            </h2>
-            <div className="flex-1 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+      {/* MEMBER SIDEBAR */}
+      <aside className={`sidebar ${showMembers ? "sidebar-open" : ""}`} onClick={(e) => e.stopPropagation()}>
+        <div className="sidebar-inner">
+          <div className="sidebar-section" style={{ flex: 1, minHeight: 0 }}>
+            <p className="sidebar-label"><Shield size={12} /> Audience</p>
+            <div className="member-list">
               {member.map((m) => {
-                const inCall = callMembers.find(
-                  (c) => c.userId === m.userId._id
-                );
+                const inCall = callMembers.find((c) => c.userId === m.userId._id);
                 return (
-                  <div
-                    key={m.userId._id}
-                    className="flex items-center justify-between group"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
-                        {m.userId.username}
-                      </span>
-                      {inCall && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.7)] inline-block" />
-                      )}
+                  <div key={m.userId._id} className="member-row">
+                    <Avatar name={m.userId.username} size={28} />
+                    <span className="member-name">{m.userId.username}</span>
+                    <div className="member-badges">
+                      {inCall && <span className="badge-call" title="In call" />}
+                      {m.userId._id === room?.hostId && <span className="badge-host" title="Host" />}
                     </div>
-                    {m.userId._id === room?.hostId && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]" />
-                    )}
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* Volume controls — shown only when in call with others */}
           {isInCall && callMembers.length > 0 && (
-            <div className="border-t border-white/10 pt-4 flex flex-col gap-3">
-              <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 flex items-center gap-2">
-                <Volume2 size={14} /> Voice Volumes
-              </h2>
-              <div className="space-y-3 overflow-y-auto max-h-48 custom-scrollbar pr-1">
-                {callMembers.map(({ socketId, userId, username }) => {
-                  const vol = volumes[socketId] ?? 1;
-                  const muted = vol === 0;
-                  return (
-                    <div key={socketId} className="flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-300 truncate max-w-[130px]">
-                          {username ||
-                            member.find((m) => m.userId._id === userId)
-                              ?.userId?.username ||
-                            "Unknown"}
-                        </span>
-                        <button
-                          onClick={() =>
-                            setUserVolume(socketId, muted ? 1 : 0)
-                          }
-                          className={`p-1 rounded-lg transition-colors ${
-                            muted
-                              ? "text-red-400 hover:bg-red-500/10"
-                              : "text-slate-400 hover:bg-white/10"
-                          }`}
-                        >
-                          {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                        </button>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.05}
-                        value={vol}
-                        onChange={(e) =>
-                          setUserVolume(socketId, parseFloat(e.target.value))
-                        }
-                        className="w-full h-1 accent-indigo-400 cursor-pointer rounded-full"
-                      />
+            <div className="sidebar-section vol-section">
+              <p className="sidebar-label"><Volume2 size={12} /> Voice volumes</p>
+              {callMembers.map(({ socketId, userId, username }) => {
+                const vol   = volumes[socketId] ?? 1;
+                const muted = vol === 0;
+                const displayName = username || member.find((m) => m.userId._id === userId)?.userId?.username || "Unknown";
+                return (
+                  <div key={socketId} className="vol-row">
+                    <div className="vol-header">
+                      <span className="vol-name">{displayName}</span>
+                      <button
+                        className={`vol-mute-btn ${muted ? "muted" : ""}`}
+                        onClick={() => setUserVolume(socketId, muted ? 1 : 0)}
+                      >
+                        {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
+                      </button>
                     </div>
-                  );
-                })}
-              </div>
+                    <input
+                      type="range" min={0} max={1} step={0.05} value={vol}
+                      onChange={(e) => setUserVolume(socketId, parseFloat(e.target.value))}
+                      className="vol-slider"
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
       </aside>
 
       {/* MIC ERROR TOAST */}
-      {micError && (
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[200] px-5 py-3 bg-red-900/80 backdrop-blur-xl border border-red-500/30 rounded-2xl text-sm text-red-200 shadow-xl max-w-xs text-center">
-          {micError}
+      {micError && <div className="mic-toast">{micError}</div>}
+
+      {/* PAUSE OVERLAY */}
+      {!isPlaying && (
+        <div className="pause-overlay" onClick={togglePlay}>
+          <div className="pause-icon-wrap">
+            <Play size={isMobile ? 28 : 38} fill="white" />
+          </div>
         </div>
       )}
 
       {/* BOTTOM CONTROLS */}
-      <div
-        className={`absolute bottom-8 inset-x-0 px-8 flex justify-center transition-all duration-700 ${
-          hoverControls
-            ? "opacity-100 translate-y-0"
-            : "opacity-0 translate-y-12 pointer-events-none"
-        }`}
-      >
-        <div className="w-full max-w-5xl bg-slate-900/60 backdrop-blur-3xl rounded-[2.5rem] border border-white/10 p-4 shadow-2xl">
+      <div className={`theater-bottom ${showControls ? "vis" : "hid"}`}>
+        <div className="controls-card">
 
           {/* Progress bar */}
-          <div
-            className="group/progress relative h-1 w-full mb-4 bg-white/20 cursor-pointer flex items-center transition-all duration-150 hover:h-1.5"
-            onClick={handleSeek}
-          >
-            <div className="absolute inset-0 bg-white/10" />
-            <div
-              className="h-full bg-red-600 relative transition-all duration-75"
-              style={{ width: `${progress}%` }}
-            >
-              <div className="absolute right-[-6px] top-1/2 -translate-y-1/2 w-3 h-3 bg-red-600 rounded-full scale-0 group-hover/progress:scale-100 transition-transform duration-150 shadow-[0_0_10px_rgba(220,38,38,0.5)]" />
+          <div className="progress-track" onClick={isHost ? handleSeek : undefined} style={{ cursor: isHost ? "pointer" : "default" }}>
+            <div className="progress-fill" style={{ width: `${progress}%` }}>
+              {isHost && <div className="progress-thumb" />}
             </div>
           </div>
 
-          <div className="flex items-center justify-between px-4">
-            {/* Left: playback controls + timestamp */}
-            <div className="flex items-center gap-6">
+          {/* Time */}
+          <div className="time-row">
+            <span className="time-current">{fmt(currentTime)}</span>
+            <span className="time-sep">/</span>
+            <span className="time-total">{fmt(duration)}</span>
+          </div>
+
+          {/* Controls row */}
+          <div className="controls-row">
+
+            {/* Left: playback */}
+            <div className="controls-left">
               {isHost && (
-                <div className="flex items-center gap-4">
+                <>
                   <button
+                    className="ctrl-btn"
+                    aria-label="Rewind 10s"
                     onClick={() => {
                       videoRef.current.currentTime -= 10;
-                      socket.emit("toggle-play", {
-                        state: videoRef.current.paused ? "pause" : "play",
-                        current_time: videoRef.current.currentTime,
-                      });
+                      socket.emit("toggle-play", { state: videoRef.current.paused ? "pause" : "play", current_time: videoRef.current.currentTime });
                     }}
-                    className="text-slate-400 hover:text-white transition-colors"
                   >
-                    <Rewind size={22} />
+                    <Rewind size={isMobile ? 17 : 19} />
+                  </button>
+                  <button className="play-btn" onClick={togglePlay} aria-label={isPlaying ? "Pause" : "Play"}>
+                    {isPlaying ? <Pause size={isMobile ? 19 : 22} fill="black" /> : <Play size={isMobile ? 19 : 22} fill="black" className="play-offset" />}
                   </button>
                   <button
-                    onClick={togglePlay}
-                    className="w-12 h-12 flex items-center justify-center bg-white text-black rounded-full hover:scale-110 transition-transform shadow-lg"
-                  >
-                    {isPlaying ? (
-                      <Pause size={24} fill="black" />
-                    ) : (
-                      <Play size={24} fill="black" className="ml-1" />
-                    )}
-                  </button>
-                  <button
+                    className="ctrl-btn"
+                    aria-label="Forward 10s"
                     onClick={() => {
                       videoRef.current.currentTime += 10;
-                      socket.emit("toggle-play", {
-                        state: videoRef.current.paused ? "pause" : "play",
-                        current_time: videoRef.current.currentTime,
-                      });
+                      socket.emit("toggle-play", { state: videoRef.current.paused ? "pause" : "play", current_time: videoRef.current.currentTime });
                     }}
-                    className="text-slate-400 hover:text-white transition-colors"
                   >
-                    <FastForward size={22} />
+                    <FastForward size={isMobile ? 17 : 19} />
                   </button>
-                </div>
+                </>
               )}
-              <div className="text-sm font-medium tracking-tight font-mono">
-                <span className="text-white">{formatTime(currentTime)}</span>
-                <span className="mx-2 text-white/20">|</span>
-                <span className="text-white/40">{formatTime(duration)}</span>
+
+              {/* Movie volume control */}
+              <div className="movie-vol-group">
+                <button
+                  className="ctrl-btn"
+                  aria-label="Toggle movie audio"
+                  onClick={() => setMovieMuted((p) => !p)}
+                >
+                  <VolIcon v={movieMuted ? 0 : movieVol} size={isMobile ? 16 : 18} />
+                </button>
+                {!isMobile && (
+                  <input
+                    type="range" min={0} max={1} step={0.05}
+                    value={movieMuted ? 0 : movieVol}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      setMovieVol(v);
+                      if (v > 0) setMovieMuted(false);
+                    }}
+                    className="movie-vol-slider"
+                    aria-label="Movie volume"
+                  />
+                )}
               </div>
             </div>
 
-            {/* Right: voice + fullscreen + exit */}
-            <div className="flex items-center gap-2">
+            {/* Right: voice + util */}
+            <div className="controls-right">
 
-              {/* Mute toggle — only while in call */}
               {isInCall && (
                 <button
+                  className={`ctrl-btn mic-btn ${isMuted ? "danger" : ""}`}
                   onClick={toggleMute}
-                  title={isMuted ? "Unmute" : "Mute"}
-                  className={`p-3 rounded-2xl transition-all border ${
-                    isMuted
-                      ? "bg-red-500/20 border-red-500/40 text-red-400 hover:bg-red-500/30"
-                      : "border-white/10 hover:bg-white/10 text-slate-300"
-                  }`}
+                  aria-label={isMuted ? "Unmute mic" : "Mute mic"}
                 >
-                  {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
+                  {isMuted ? <MicOff size={isMobile ? 16 : 18} /> : <Mic size={isMobile ? 16 : 18} />}
                 </button>
               )}
 
-              {/* Join / Leave call */}
               <button
+                className={`call-btn ${isInCall ? "in-call" : "join-call"}`}
                 onClick={isInCall ? leaveCall : handleJoinCall}
-                title={isInCall ? "Leave voice call" : "Join voice call"}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl transition-all font-bold text-xs uppercase tracking-widest border ${
-                  isInCall
-                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400 hover:bg-red-500/20 hover:border-red-500/30 hover:text-red-400"
-                    : "bg-indigo-500/10 border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20"
-                }`}
+                aria-label={isInCall ? "Leave voice call" : "Join voice call"}
               >
-                {isInCall ? (
-                  <>
-                    <PhoneOff size={16} /> Leave
-                  </>
-                ) : (
-                  <>
-                    <PhoneCall size={16} /> Join Call
-                  </>
-                )}
+                {isInCall
+                  ? <><PhoneOff size={14} />{!isMobile && " Leave"}</>
+                  : <><PhoneCall size={14} />{!isMobile && " Join call"}</>
+                }
               </button>
 
-              <div className="w-[1px] h-6 bg-white/10 mx-1" />
+              <div className="divider-v" />
 
               <button
-                onClick={() => containerRef.current?.requestFullscreen()}
-                className="p-3 hover:bg-white/10 rounded-2xl transition-all"
+                className="ctrl-btn"
+                onClick={toggleFullscreen}
+                aria-label={isFullscreen ? "Exit fullscreen (F)" : "Enter fullscreen (F)"}
+                title={isFullscreen ? "Exit fullscreen [F]" : "Fullscreen [F]"}
               >
-                <Maximize size={20} className="text-slate-300" />
+                {isFullscreen ? <Minimize size={isMobile ? 16 : 18} /> : <Maximize size={isMobile ? 16 : 18} />}
               </button>
 
-              <div className="w-[1px] h-6 bg-white/10 mx-1" />
+              <div className="divider-v" />
 
-              <button
-                onClick={leaveRoom}
-                className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-2xl transition-all font-bold text-xs uppercase tracking-widest border border-red-500/20"
-              >
-                <LogOut size={16} /> Exit
+              <button className="leave-btn" onClick={leaveRoom} aria-label="Leave room">
+                <LogOut size={isMobile ? 15 : 17} />
+                {!isMobile && " Exit"}
               </button>
             </div>
           </div>
+
+          {!isMobile && (
+            <div className="kbd-hints">
+              <span><kbd>Space</kbd> play/pause</span>
+              <span><kbd>F</kbd> fullscreen</span>
+              <span><kbd>M</kbd> mute movie</span>
+              {isHost && <span><kbd>←</kbd><kbd>→</kbd> seek</span>}
+            </div>
+          )}
         </div>
       </div>
 
-      <style>
-        {`
-          @keyframes toastIn {
-            from { transform: translateX(40px); opacity: 0; scale: 0.9; }
-            to { transform: translateX(0); opacity: 1; scale: 1; }
-          }
-          .toast-animation {
-            animation: toastIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-          }
-          .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-          .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-          .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-          }
-        `}
-      </style>
+      <style>{`
+        .theater-root {
+          position: fixed; inset: 0;
+          background: #000;
+          display: flex; align-items: center; justify-content: center;
+          color: #fff;
+          overflow: hidden;
+          font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+          user-select: none;
+          -webkit-user-select: none;
+        }
+
+        .theater-video {
+          width: 100%; height: 100%;
+          object-fit: contain;
+          cursor: pointer;
+        }
+
+        /* ── top bar ── */
+        .theater-top {
+          position: absolute; top: 0; left: 0; right: 0;
+          padding: clamp(12px, 3vw, 24px);
+          display: flex; justify-content: space-between; align-items: flex-start;
+          gap: 12px;
+          background: linear-gradient(to bottom, rgba(0,0,0,.75) 0%, transparent 100%);
+          transition: opacity .4s ease, transform .4s ease;
+        }
+        .vis { opacity: 1; pointer-events: auto; transform: translateY(0); }
+        .hid { opacity: 0; pointer-events: none; }
+        .theater-top.hid { transform: translateY(-8px); }
+        .theater-bottom.hid { transform: translateY(8px); }
+
+        .top-left {
+          display: flex; flex-direction: column; gap: 6px;
+          min-width: 0;
+        }
+        .movie-title {
+          font-size: clamp(15px, 2.5vw, 22px);
+          font-weight: 600; letter-spacing: -.02em;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          max-width: 50vw;
+          color: rgba(255,255,255,.92);
+        }
+        .room-code-btn {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 4px 10px; border-radius: 20px;
+          background: rgba(255,255,255,.06);
+          border: 1px solid rgba(255,255,255,.12);
+          cursor: pointer; color: inherit;
+          transition: background .15s;
+          width: fit-content;
+        }
+        .room-code-btn:hover { background: rgba(255,255,255,.12); }
+        .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; letter-spacing: .12em; color: rgba(255,255,255,.5); text-transform: uppercase; }
+        .icon-success { color: #34d399; }
+        .icon-muted   { color: rgba(255,255,255,.4); }
+
+        .top-right {
+          display: flex; align-items: center; gap: 8px;
+          background: rgba(0,0,0,.3);
+          backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+          padding: 6px 8px; border-radius: 16px;
+          border: 1px solid rgba(255,255,255,.07);
+          flex-shrink: 0;
+        }
+        .call-pill {
+          display: flex; align-items: center; gap: 5px;
+          padding: 3px 8px; border-radius: 20px;
+          background: rgba(52,211,153,.12); border: 1px solid rgba(52,211,153,.2);
+          font-size: 11px; color: #34d399; font-weight: 600;
+        }
+        .call-dot {
+          width: 6px; height: 6px; border-radius: 50%;
+          background: #34d399; animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+        .avatar-stack { display: flex; }
+        .avatar-more {
+          width: 30px; height: 30px; border-radius: 50%;
+          background: rgba(255,255,255,.1); border: 2px solid #000;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 11px; font-weight: 700; color: rgba(255,255,255,.6);
+          margin-left: -6px;
+        }
+
+        .icon-btn {
+          padding: 6px; border-radius: 10px; cursor: pointer;
+          background: transparent; border: none; color: rgba(255,255,255,.65);
+          transition: background .15s, color .15s;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .icon-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
+        .icon-btn.active { background: rgba(255,255,255,.95); color: #000; }
+
+        /* ── sidebar ── */
+        .sidebar {
+          position: absolute; right: 0; top: 0; bottom: 0;
+          width: min(280px, 85vw);
+          background: rgba(10,10,14,.85);
+          backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+          border-left: 1px solid rgba(255,255,255,.07);
+          transition: transform .35s cubic-bezier(.4,0,.2,1);
+          transform: translateX(100%);
+          z-index: 50;
+        }
+        .sidebar-open { transform: translateX(0); }
+
+        .sidebar-inner {
+          display: flex; flex-direction: column; gap: 0;
+          height: 100%; padding: 20px 16px;
+          overflow: hidden;
+        }
+        .sidebar-section { display: flex; flex-direction: column; gap: 10px; }
+        .vol-section {
+          border-top: 1px solid rgba(255,255,255,.07);
+          padding-top: 14px; margin-top: 14px;
+        }
+        .sidebar-label {
+          display: flex; align-items: center; gap: 5px;
+          font-size: 10px; font-weight: 700; letter-spacing: .14em;
+          color: rgba(255,255,255,.35); text-transform: uppercase;
+          margin: 0;
+        }
+        .member-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; flex: 1; }
+        .member-list::-webkit-scrollbar { width: 3px; }
+        .member-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 4px; }
+        .member-row {
+          display: flex; align-items: center; gap: 9px;
+          padding: 5px 6px; border-radius: 8px;
+          transition: background .12s;
+        }
+        .member-row:hover { background: rgba(255,255,255,.04); }
+        .member-name { font-size: 13px; color: rgba(255,255,255,.8); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .member-badges { display: flex; align-items: center; gap: 4px; }
+        .badge-call {
+          width: 6px; height: 6px; border-radius: 50%;
+          background: #34d399;
+          box-shadow: 0 0 6px rgba(52,211,153,.6);
+        }
+        .badge-host {
+          width: 6px; height: 6px; border-radius: 50%;
+          background: #fbbf24;
+          box-shadow: 0 0 6px rgba(251,191,36,.5);
+        }
+
+        /* volume rows */
+        .vol-row { display: flex; flex-direction: column; gap: 5px; }
+        .vol-header { display: flex; align-items: center; justify-content: space-between; }
+        .vol-name { font-size: 12px; color: rgba(255,255,255,.65); max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .vol-mute-btn {
+          padding: 3px; border-radius: 6px; cursor: pointer;
+          background: transparent; border: none; color: rgba(255,255,255,.4);
+          transition: background .12s, color .12s; display: flex;
+        }
+        .vol-mute-btn.muted { color: #f87171; }
+        .vol-mute-btn:hover { background: rgba(255,255,255,.08); color: #fff; }
+        .vol-slider {
+          width: 100%; height: 3px;
+          accent-color: #818cf8;
+          cursor: pointer; border-radius: 4px;
+        }
+
+        /* ── mic toast ── */
+        .mic-toast {
+          position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+          z-index: 200;
+          padding: 10px 18px; border-radius: 12px;
+          background: rgba(127,29,29,.85);
+          backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+          border: 1px solid rgba(248,113,113,.25);
+          font-size: 13px; color: #fca5a5;
+          white-space: nowrap;
+          animation: slideDown .3s ease;
+        }
+        @keyframes slideDown { from{transform:translateX(-50%) translateY(-8px);opacity:0} to{transform:translateX(-50%) translateY(0);opacity:1} }
+
+        /* ── pause overlay ── */
+        .pause-overlay {
+          position: absolute; inset: 0;
+          display: flex; align-items: center; justify-content: center;
+          pointer-events: auto; cursor: pointer;
+        }
+        .pause-icon-wrap {
+          width: 64px; height: 64px; border-radius: 50%;
+          background: rgba(0,0,0,.55);
+          backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+          border: 1px solid rgba(255,255,255,.15);
+          display: flex; align-items: center; justify-content: center;
+          animation: popIn .2s cubic-bezier(.34,1.56,.64,1);
+          pointer-events: none;
+        }
+        @keyframes popIn { from{opacity:0;transform:scale(.7)} to{opacity:1;transform:scale(1)} }
+
+        /* ── bottom controls ── */
+        .theater-bottom {
+          position: absolute; bottom: 0; left: 0; right: 0;
+          padding: clamp(8px, 2vw, 20px) clamp(8px, 3vw, 28px);
+          background: linear-gradient(to top, rgba(0,0,0,.85) 0%, transparent 100%);
+          transition: opacity .4s ease, transform .4s ease;
+        }
+
+        .controls-card {
+          width: 100%; max-width: 960px; margin: 0 auto;
+          background: rgba(12,12,18,.75);
+          backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+          border: 1px solid rgba(255,255,255,.07);
+          border-radius: clamp(14px, 2vw, 24px);
+          padding: clamp(10px, 2vw, 16px) clamp(12px, 2.5vw, 22px);
+          display: flex; flex-direction: column; gap: 8px;
+        }
+
+        /* progress */
+        .progress-track {
+          position: relative; height: 3px; width: 100%;
+          background: rgba(255,255,255,.15);
+          border-radius: 999px; overflow: visible;
+          transition: height .15s;
+        }
+        .progress-track:hover { height: 5px; }
+        .progress-fill {
+          height: 100%; background: #e03131;
+          border-radius: 999px; position: relative;
+          transition: width .075s linear;
+        }
+        .progress-thumb {
+          position: absolute; right: -5px; top: 50%; transform: translateY(-50%);
+          width: 12px; height: 12px; border-radius: 50%;
+          background: #fff; box-shadow: 0 0 8px rgba(224,49,49,.5);
+          opacity: 0; transition: opacity .15s;
+        }
+        .progress-track:hover .progress-thumb { opacity: 1; }
+
+        .time-row {
+          display: flex; align-items: center; gap: 4px;
+          font-size: 11px; font-family: 'SF Mono','Fira Code',monospace;
+          color: rgba(255,255,255,.45);
+        }
+        .time-current { color: rgba(255,255,255,.85); font-weight: 600; }
+        .time-sep { color: rgba(255,255,255,.2); }
+        .time-total {}
+
+        .controls-row {
+          display: flex; align-items: center; justify-content: space-between; gap: 8px;
+          flex-wrap: wrap;
+        }
+        .controls-left, .controls-right {
+          display: flex; align-items: center; gap: clamp(4px, 1vw, 10px);
+        }
+
+        .ctrl-btn {
+          padding: clamp(6px, 1vw, 9px); border-radius: 10px;
+          background: transparent; border: none; color: rgba(255,255,255,.6);
+          cursor: pointer; transition: background .12s, color .12s;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .ctrl-btn:hover { background: rgba(255,255,255,.09); color: #fff; }
+        .ctrl-btn.danger { color: #f87171; }
+        .ctrl-btn.danger:hover { background: rgba(248,113,113,.12); }
+        .ctrl-btn.mic-btn { border: 1px solid rgba(255,255,255,.08); border-radius: 10px; }
+
+        .play-btn {
+          width: clamp(38px, 5vw, 48px); height: clamp(38px, 5vw, 48px);
+          border-radius: 50%; border: none; cursor: pointer;
+          background: #fff; color: #000;
+          display: flex; align-items: center; justify-content: center;
+          transition: transform .12s, box-shadow .12s;
+          flex-shrink: 0;
+        }
+        .play-btn:hover { transform: scale(1.08); box-shadow: 0 0 0 6px rgba(255,255,255,.08); }
+        .play-offset { margin-left: 2px; }
+
+        /* movie volume */
+        .movie-vol-group { display: flex; align-items: center; gap: 4px; }
+        .movie-vol-slider {
+          width: clamp(50px, 7vw, 80px); height: 3px;
+          accent-color: rgba(255,255,255,.7);
+          cursor: pointer;
+        }
+
+        /* call button */
+        .call-btn {
+          display: flex; align-items: center; gap: 5px;
+          padding: clamp(6px, 1vw, 8px) clamp(10px, 1.5vw, 14px);
+          border-radius: 10px; border: none; cursor: pointer;
+          font-size: clamp(11px, 1.2vw, 13px); font-weight: 700;
+          letter-spacing: .05em; text-transform: uppercase;
+          transition: background .15s, color .15s;
+          white-space: nowrap;
+        }
+        .join-call {
+          background: rgba(99,102,241,.15); border: 1px solid rgba(99,102,241,.25);
+          color: #a5b4fc;
+        }
+        .join-call:hover { background: rgba(99,102,241,.25); }
+        .in-call {
+          background: rgba(52,211,153,.12); border: 1px solid rgba(52,211,153,.25);
+          color: #34d399;
+        }
+        .in-call:hover { background: rgba(248,113,113,.15); border-color: rgba(248,113,113,.25); color: #f87171; }
+
+        .leave-btn {
+          display: flex; align-items: center; gap: 5px;
+          padding: clamp(6px, 1vw, 8px) clamp(10px, 1.5vw, 16px);
+          border-radius: 10px; border: 1px solid rgba(224,49,49,.2);
+          background: rgba(224,49,49,.08); color: #f87171;
+          cursor: pointer; font-size: clamp(11px, 1.2vw, 13px); font-weight: 700;
+          letter-spacing: .05em; text-transform: uppercase;
+          transition: background .15s, color .15s;
+          white-space: nowrap;
+        }
+        .leave-btn:hover { background: rgba(224,49,49,.7); color: #fff; border-color: transparent; }
+
+        .divider-v {
+          width: 1px; height: 22px;
+          background: rgba(255,255,255,.08); flex-shrink: 0;
+        }
+
+        /* keyboard hints */
+        .kbd-hints {
+          display: flex; align-items: center; gap: 14px;
+          padding-top: 2px;
+          flex-wrap: wrap;
+        }
+        .kbd-hints span {
+          display: flex; align-items: center; gap: 4px;
+          font-size: 10px; color: rgba(255,255,255,.22);
+        }
+        kbd {
+          display: inline-flex; align-items: center; justify-content: center;
+          padding: 1px 5px; border-radius: 4px;
+          background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
+          font-family: 'SF Mono','Fira Code',monospace;
+          font-size: 9px; color: rgba(255,255,255,.35);
+        }
+
+        /* mobile adjustments */
+        @media (max-width: 639px) {
+          .controls-left, .controls-right { gap: 4px; }
+          .controls-card { padding: 10px 12px; gap: 6px; }
+          .sidebar { width: 88vw; }
+        }
+      `}</style>
     </div>
   );
 };

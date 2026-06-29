@@ -85,15 +85,16 @@ const leaveRoom = async (io, socket, currentHostId) => {
 
   io.to(roomId).emit("room-users", roomUsers[roomId]);
 
-  /* ===== ROOM DELETE TIMER ===== */
-
-  if (roomUsers[roomId]?.length === 0) {
-    await Room.deleteOne({ roomCode: roomId });
-    delete roomUsers[roomId];
-  }
   socket.roomId = null;
   socket.userId = null;
   socket.peerId = null;
+  /* ===== ROOM DELETE TIMER ===== */
+  setTimeout(async () => {
+    if (roomUsers[roomId]?.length === 0) {
+      await Room.deleteOne({ roomCode: roomId });
+      delete roomUsers[roomId];
+    }
+  }, 5000);
 };
 
 
@@ -129,7 +130,7 @@ const requestSync = (io, socket, data) => {
   if (roomId && status[roomId]) {
     socket.emit("control", status[roomId]);
   }
-} 
+}
 
 
 
