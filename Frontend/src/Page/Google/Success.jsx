@@ -13,7 +13,6 @@ const Success = () => {
     const redirectTo = searchParams.get('redirect') || '/';
     if (token) {
       localStorage.setItem('token', token);
-      
       dispatch(verifyUser())
         .unwrap()
         .then(() => {
@@ -22,6 +21,7 @@ const Success = () => {
         })
         .catch((err) => {
           console.error("Verification failed:", err);
+          
           localStorage.removeItem('token');
           navigate('/login');
         });

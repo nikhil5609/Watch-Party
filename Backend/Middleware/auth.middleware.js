@@ -9,9 +9,6 @@ exports.verifyToken = async (req, res, next) => {
       authHeader?.startsWith('Bearer ')
         ? authHeader.split(' ')[1]
         : req.cookies?.token;
-      console.log(token);
-      console.log(authHeader);
-      console.log(req.cookies);
       
       
         if (!token) {
