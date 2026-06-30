@@ -5,11 +5,11 @@ import {
   Play, Pause, Maximize, Minimize,
   LogOut, Shield, Rewind, FastForward, Copy, Check, Users,
   Mic, MicOff, PhoneCall, PhoneOff, Volume2, VolumeX, Volume1,
+  Share2, X, Instagram, Youtube, Send,
 } from "lucide-react";
 import { socket } from "../../socket";
 import { clearRoomState } from "../../Store/room.slice";
 
-// ── tiny helpers ────────────────────────────────────────────────────────────
 const fmt = (t) => {
   if (isNaN(t)) return "0:00";
   const m = Math.floor(t / 60);
@@ -19,27 +19,18 @@ const fmt = (t) => {
 
 const Avatar = ({ name = "?", size = 36, ring = false }) => (
   <div
-    style={{
-      width: size, height: size, borderRadius: "50%",
-      background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: size * 0.38, fontWeight: 700, color: "#fff",
-      border: ring ? "2px solid #000" : "none",
-      flexShrink: 0,
-    }}
+    className={`flex items-center justify-center rounded-full flex-shrink-0 font-bold text-white bg-gradient-to-br from-indigo-500 to-violet-500 ${ring ? "border-2 border-black" : ""}`}
+    style={{ width: size, height: size, fontSize: size * 0.38 }}
   >
     {name.charAt(0).toUpperCase()}
   </div>
 );
-
-// ── volume icon picker ───────────────────────────────────────────────────────
 const VolIcon = ({ v, size = 18 }) => {
   if (v === 0) return <VolumeX size={size} />;
   if (v < 0.5) return <Volume1 size={size} />;
   return <Volume2 size={size} />;
 };
 
-// ── main component ───────────────────────────────────────────────────────────
 const Theater = ({ member = [], webrtc }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -47,7 +38,6 @@ const Theater = ({ member = [], webrtc }) => {
   const { room } = useSelector((s) => s.room);
   const { user }  = useSelector((s) => s.user);
 
-  // ui state
   const [isPlaying,    setIsPlaying]    = useState(false);
   const [showMembers,  setShowMembers]  = useState(false);
   const [showControls, setShowControls] = useState(true);
@@ -60,6 +50,8 @@ const Theater = ({ member = [], webrtc }) => {
   const [movieVol,     setMovieVol]     = useState(1);
   const [movieMuted,   setMovieMuted]   = useState(false);
   const [isMobile,     setIsMobile]     = useState(false);
+  const [showShare,    setShowShare]    = useState(false);
+  const [shareCopied,  setShareCopied]  = useState(false);
 
   const videoRef      = useRef(null);
   const containerRef  = useRef(null);
@@ -72,7 +64,6 @@ const Theater = ({ member = [], webrtc }) => {
     joinCall, leaveCall, toggleMute, setUserVolume,
   } = webrtc;
 
-  // ── mobile detect ──────────────────────────────────────────────────────────
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 640);
     check();
@@ -80,7 +71,6 @@ const Theater = ({ member = [], webrtc }) => {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // ── auto-hide controls ─────────────────────────────────────────────────────
   const resetHideTimer = useCallback(() => {
     setShowControls(true);
     clearTimeout(hideTimerRef.current);
@@ -92,7 +82,6 @@ const Theater = ({ member = [], webrtc }) => {
     return () => clearTimeout(hideTimerRef.current);
   }, []);
 
-  // ── keyboard shortcuts ─────────────────────────────────────────────────────
   useEffect(() => {
     const onKey = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
@@ -117,14 +106,12 @@ const Theater = ({ member = [], webrtc }) => {
     return () => window.removeEventListener("keydown", onKey);
   }, [isHost]);
 
-  // ── fullscreen change listener ─────────────────────────────────────────────
   useEffect(() => {
     const onFs = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
-  // ── audio ducking ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isInCall) return;
     const video = videoRef.current;
@@ -141,25 +128,30 @@ const Theater = ({ member = [], webrtc }) => {
     return () => { if (duckFrameRef.current) cancelAnimationFrame(duckFrameRef.current); };
   }, [isSomeoneSpeaking, isInCall, movieVol]);
 
-  // ── apply movie volume to video element ───────────────────────────────────
   useEffect(() => {
     if (!videoRef.current) return;
     videoRef.current.volume = movieMuted ? 0 : movieVol;
     videoRef.current.muted  = movieMuted;
   }, [movieVol, movieMuted]);
 
-  // ── call handlers ──────────────────────────────────────────────────────────
   const handleJoinCall = async () => {
     setMicError(null);
     try { await joinCall(user._id, user.username); }
     catch { setMicError("Mic access denied — check browser settings."); setTimeout(() => setMicError(null), 5000); }
   };
 
-  // ── video helpers ──────────────────────────────────────────────────────────
   const copyRoomCode = () => {
     navigator.clipboard.writeText(room?.roomCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const shareLink = `${window.location.origin}/room/${room?.roomCode}`;
+
+  const copyShareLink = () => {
+    navigator.clipboard.writeText(shareLink);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
   };
 
   const togglePlay = () => {
@@ -247,52 +239,70 @@ const Theater = ({ member = [], webrtc }) => {
     else document.exitFullscreen();
   };
 
-  // ── render ─────────────────────────────────────────────────────────────────
   return (
     <div
       ref={containerRef}
-      className="theater-root"
+      className="fixed inset-0 bg-black flex items-center justify-center text-white overflow-hidden font-sans select-none"
       onMouseMove={resetHideTimer}
       onTouchStart={resetHideTimer}
       onClick={() => { if (showMembers) setShowMembers(false); }}
     >
 
-      {/* VIDEO */}
       <video
         ref={videoRef}
         src={room?.video}
-        className="theater-video"
-        onClick={togglePlay}
+        className="w-full h-full object-contain"
         playsInline
       />
 
-      {/* TOP BAR */}
-      <div className={`theater-top ${showControls ? "vis" : "hid"}`}>
-        <div className="top-left">
-          <span className="movie-title">{room?.videoTitle || "Cinema Room"}</span>
-          <button className="room-code-btn" onClick={copyRoomCode}>
-            <span className="mono">{room?.roomCode}</span>
-            {copied ? <Check size={13} className="icon-success" /> : <Copy size={13} className="icon-muted" />}
+      <div
+        className={`absolute top-0 left-0 right-0 flex items-start justify-between gap-3 p-3 sm:p-6 bg-gradient-to-b from-black/75 to-transparent transition-all duration-400 ease-in-out ${
+          showControls ? "opacity-100 pointer-events-auto translate-y-0" : "opacity-0 pointer-events-none -translate-y-2"
+        }`}
+      >
+        <div className="flex flex-col gap-1.5 min-w-0">
+          <span className="text-base sm:text-xl font-semibold tracking-tight text-white/90 whitespace-nowrap overflow-hidden text-ellipsis max-w-[50vw]">
+            {room?.videoTitle || "Cinema Room"}
+          </span>
+          <button
+            className="inline-flex items-center gap-1.5 w-fit px-2.5 py-1 rounded-full bg-white/[0.06] border border-white/10 cursor-pointer text-inherit transition-colors hover:bg-white/10"
+            onClick={copyRoomCode}
+          >
+            <span className="font-mono text-[11px] tracking-widest text-white/50 uppercase">{room?.roomCode}</span>
+            {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} className="text-white/40" />}
           </button>
         </div>
 
-        <div className="top-right">
+        <div className="flex items-center gap-2 bg-black/30 backdrop-blur-md p-1.5 rounded-2xl border border-white/[0.07] flex-shrink-0">
           {callMembers.length > 0 && (
-            <div className="call-pill">
-              <span className="call-dot" />
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-400/10 border border-emerald-400/20 text-[11px] text-emerald-400 font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span>{callMembers.length + 1} in call</span>
             </div>
           )}
-          <div className="avatar-stack">
+          <div className="flex">
             {member.slice(0, isMobile ? 2 : 4).map((m, i) => (
-              <Avatar key={i} name={m.userId.username} size={isMobile ? 30 : 34} ring />
+              <div key={i} className="-ml-1.5 first:ml-0">
+                <Avatar name={m.userId.username} size={isMobile ? 30 : 34} ring />
+              </div>
             ))}
             {member.length > (isMobile ? 2 : 4) && (
-              <div className="avatar-more">+{member.length - (isMobile ? 2 : 4)}</div>
+              <div className="w-[30px] h-[30px] -ml-1.5 rounded-full bg-white/10 border-2 border-black flex items-center justify-center text-[11px] font-bold text-white/60">
+                +{member.length - (isMobile ? 2 : 4)}
+              </div>
             )}
           </div>
           <button
-            className={`icon-btn ${showMembers ? "active" : ""}`}
+            className="p-1.5 rounded-lg cursor-pointer bg-transparent border-none text-white/65 transition-colors hover:bg-white/10 hover:text-white flex items-center justify-center"
+            onClick={(e) => { e.stopPropagation(); setShowShare(true); }}
+            aria-label="Share room"
+          >
+            <Share2 size={isMobile ? 17 : 19} />
+          </button>
+          <button
+            className={`p-1.5 rounded-lg cursor-pointer border-none transition-colors flex items-center justify-center ${
+              showMembers ? "bg-white/95 text-black" : "bg-transparent text-white/65 hover:bg-white/10 hover:text-white"
+            }`}
             onClick={(e) => { e.stopPropagation(); setShowMembers((p) => !p); }}
             aria-label="Toggle member list"
           >
@@ -302,20 +312,39 @@ const Theater = ({ member = [], webrtc }) => {
       </div>
 
       {/* MEMBER SIDEBAR */}
-      <aside className={`sidebar ${showMembers ? "sidebar-open" : ""}`} onClick={(e) => e.stopPropagation()}>
-        <div className="sidebar-inner">
-          <div className="sidebar-section" style={{ flex: 1, minHeight: 0 }}>
-            <p className="sidebar-label"><Shield size={12} /> Audience</p>
-            <div className="member-list">
+      <aside
+        className={`absolute right-0 top-0 bottom-0 w-[min(280px,85vw)] bg-[#0a0a0e]/85 backdrop-blur-2xl border-l border-white/[0.07] transition-transform duration-300 ease-out z-50 ${
+          showMembers ? "translate-x-0" : "translate-x-full"
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex flex-col h-full p-5 px-4 overflow-hidden">
+          <div className="flex items-center justify-between mb-3.5 flex-shrink-0">
+            <span className="text-sm font-semibold text-white/85">Room</span>
+            <button
+              className="p-1 rounded-lg cursor-pointer bg-transparent border-none text-white/50 transition-colors hover:bg-white/10 hover:text-white flex items-center justify-center"
+              onClick={() => setShowMembers(false)}
+              aria-label="Close member list"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <div className="flex flex-col gap-2.5 flex-1 min-h-0">
+            <p className="flex items-center gap-1.5 text-[10px] font-bold tracking-[.14em] text-white/35 uppercase m-0">
+              <Shield size={12} /> Audience
+            </p>
+            <div className="flex flex-col gap-1.5 overflow-y-auto flex-1">
               {member.map((m) => {
                 const inCall = callMembers.find((c) => c.userId === m.userId._id);
                 return (
-                  <div key={m.userId._id} className="member-row">
+                  <div key={m.userId._id} className="flex items-center gap-2.5 px-1.5 py-1 rounded-lg transition-colors hover:bg-white/[0.04]">
                     <Avatar name={m.userId.username} size={28} />
-                    <span className="member-name">{m.userId.username}</span>
-                    <div className="member-badges">
-                      {inCall && <span className="badge-call" title="In call" />}
-                      {m.userId._id === room?.hostId && <span className="badge-host" title="Host" />}
+                    <span className="text-[13px] text-white/80 flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">
+                      {m.userId.username}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {inCall && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" title="In call" />}
+                      {m.userId._id === room?.hostId && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]" title="Host" />}
                     </div>
                   </div>
                 );
@@ -324,18 +353,22 @@ const Theater = ({ member = [], webrtc }) => {
           </div>
 
           {isInCall && callMembers.length > 0 && (
-            <div className="sidebar-section vol-section">
-              <p className="sidebar-label"><Volume2 size={12} /> Voice volumes</p>
+            <div className="flex flex-col gap-2.5 border-t border-white/[0.07] pt-3.5 mt-3.5">
+              <p className="flex items-center gap-1.5 text-[10px] font-bold tracking-[.14em] text-white/35 uppercase m-0">
+                <Volume2 size={12} /> Voice volumes
+              </p>
               {callMembers.map(({ socketId, userId, username }) => {
                 const vol   = volumes[socketId] ?? 1;
                 const muted = vol === 0;
                 const displayName = username || member.find((m) => m.userId._id === userId)?.userId?.username || "Unknown";
                 return (
-                  <div key={socketId} className="vol-row">
-                    <div className="vol-header">
-                      <span className="vol-name">{displayName}</span>
+                  <div key={socketId} className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-white/65 max-w-[160px] whitespace-nowrap overflow-hidden text-ellipsis">{displayName}</span>
                       <button
-                        className={`vol-mute-btn ${muted ? "muted" : ""}`}
+                        className={`p-0.5 rounded-md cursor-pointer bg-transparent border-none transition-colors flex hover:bg-white/[0.08] hover:text-white ${
+                          muted ? "text-red-400" : "text-white/40"
+                        }`}
                         onClick={() => setUserVolume(socketId, muted ? 1 : 0)}
                       >
                         {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
@@ -344,7 +377,7 @@ const Theater = ({ member = [], webrtc }) => {
                     <input
                       type="range" min={0} max={1} step={0.05} value={vol}
                       onChange={(e) => setUserVolume(socketId, parseFloat(e.target.value))}
-                      className="vol-slider"
+                      className="w-full h-[3px] rounded cursor-pointer accent-indigo-400"
                     />
                   </div>
                 );
@@ -355,44 +388,115 @@ const Theater = ({ member = [], webrtc }) => {
       </aside>
 
       {/* MIC ERROR TOAST */}
-      {micError && <div className="mic-toast">{micError}</div>}
+      {micError && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[200] px-4.5 py-2.5 rounded-xl bg-red-950/85 backdrop-blur-md border border-red-400/25 text-[13px] text-red-300 whitespace-nowrap animate-[slideDown_.3s_ease]">
+          {micError}
+        </div>
+      )}
 
-      {/* PAUSE OVERLAY */}
+      {/* SHARE MODAL */}
+      {showShare && (
+        <div
+          className="absolute inset-0 z-[300] bg-black/55 backdrop-blur-sm flex items-center justify-center p-5"
+          onClick={() => setShowShare(false)}
+        >
+          <div
+            className="w-full max-w-[380px] bg-[#101016]/95 backdrop-blur-2xl border border-white/10 rounded-2xl px-5 pt-4.5 pb-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-[15px] font-semibold text-white/90">Share this room</span>
+              <button
+                className="p-1 rounded-lg cursor-pointer bg-transparent border-none text-white/50 transition-colors hover:bg-white/10 hover:text-white flex items-center justify-center"
+                onClick={() => setShowShare(false)}
+                aria-label="Close share popup"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 mb-4.5">
+              <input
+                type="text"
+                readOnly
+                value={shareLink}
+                className="flex-1 min-w-0 px-3 py-2.5 rounded-[10px] bg-white/5 border border-white/10 text-white/70 text-xs font-mono outline-none focus:border-indigo-300/40"
+                onFocus={(e) => e.target.select()}
+              />
+              <button
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-[10px] border-none bg-indigo-500/[0.18] text-indigo-300 text-xs font-bold tracking-wide cursor-pointer whitespace-nowrap transition-colors hover:bg-indigo-500/30"
+                onClick={copyShareLink}
+              >
+                {shareCopied ? <Check size={15} /> : <Copy size={15} />}
+                {shareCopied ? "Copied" : "Copy"}
+              </button>
+            </div>
+
+            <p className="text-[10px] font-bold tracking-[.14em] text-white/35 uppercase mb-2.5">Share to</p>
+            <div className="grid grid-cols-3 gap-2">
+              <button className="flex flex-col items-center gap-1.5 py-3 px-1.5 rounded-xl bg-white/[0.04] border border-white/[0.07] text-white/40 cursor-not-allowed text-[10px] font-semibold" disabled title="Coming soon">
+                <Instagram size={18} />
+                <span>Instagram</span>
+              </button>
+              <button className="flex flex-col items-center gap-1.5 py-3 px-1.5 rounded-xl bg-white/[0.04] border border-white/[0.07] text-white/40 cursor-not-allowed text-[10px] font-semibold" disabled title="Coming soon">
+                <Youtube size={18} />
+                <span>YouTube</span>
+              </button>
+              <button className="flex flex-col items-center gap-1.5 py-3 px-1.5 rounded-xl bg-white/[0.04] border border-white/[0.07] text-white/40 cursor-not-allowed text-[10px] font-semibold" disabled title="Coming soon">
+                <Send size={18} />
+                <span>Telegram</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PAUSE OVERLAY — purely visual, no click-to-toggle */}
       {!isPlaying && (
-        <div className="pause-overlay" onClick={togglePlay}>
-          <div className="pause-icon-wrap">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-16 h-16 rounded-full bg-black/55 backdrop-blur-md border border-white/15 flex items-center justify-center animate-[popIn_.2s_cubic-bezier(.34,1.56,.64,1)]">
             <Play size={isMobile ? 28 : 38} fill="white" />
           </div>
         </div>
       )}
 
       {/* BOTTOM CONTROLS */}
-      <div className={`theater-bottom ${showControls ? "vis" : "hid"}`}>
-        <div className="controls-card">
+      <div
+        className={`absolute bottom-0 left-0 right-0 px-2 sm:px-7 py-2 sm:py-5 bg-gradient-to-t from-black/85 to-transparent transition-all duration-400 ease-in-out ${
+          showControls ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2 pointer-events-none"
+        }`}
+      >
+        <div className="w-full max-w-[960px] mx-auto bg-[#0c0c12]/75 backdrop-blur-3xl border border-white/[0.07] rounded-2xl sm:rounded-3xl px-3 sm:px-5.5 py-2.5 sm:py-4 flex flex-col gap-2">
 
           {/* Progress bar */}
-          <div className="progress-track" onClick={isHost ? handleSeek : undefined} style={{ cursor: isHost ? "pointer" : "default" }}>
-            <div className="progress-fill" style={{ width: `${progress}%` }}>
-              {isHost && <div className="progress-thumb" />}
+          <div
+            className="group relative h-[3px] hover:h-[5px] w-full bg-white/15 rounded-full transition-all"
+            onClick={isHost ? handleSeek : undefined}
+            style={{ cursor: isHost ? "pointer" : "default" }}
+          >
+            <div className="h-full bg-red-600 rounded-full relative transition-[width] duration-75 ease-linear" style={{ width: `${progress}%` }}>
+              {isHost && (
+                <div className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-[0_0_8px_rgba(224,49,49,0.5)] opacity-0 group-hover:opacity-100 transition-opacity" />
+              )}
             </div>
           </div>
 
           {/* Time */}
-          <div className="time-row">
-            <span className="time-current">{fmt(currentTime)}</span>
-            <span className="time-sep">/</span>
-            <span className="time-total">{fmt(duration)}</span>
+          <div className="flex items-center gap-1 text-[11px] font-mono text-white/45">
+            <span className="text-white/85 font-semibold">{fmt(currentTime)}</span>
+            <span className="text-white/20">/</span>
+            <span>{fmt(duration)}</span>
           </div>
 
           {/* Controls row */}
-          <div className="controls-row">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
 
             {/* Left: playback */}
-            <div className="controls-left">
+            <div className="flex items-center gap-1 sm:gap-2.5">
               {isHost && (
                 <>
                   <button
-                    className="ctrl-btn"
+                    className="p-1.5 sm:p-2 rounded-lg bg-transparent border-none text-white/60 cursor-pointer transition-colors hover:bg-white/[0.09] hover:text-white flex items-center justify-center"
                     aria-label="Rewind 10s"
                     onClick={() => {
                       videoRef.current.currentTime -= 10;
@@ -401,11 +505,15 @@ const Theater = ({ member = [], webrtc }) => {
                   >
                     <Rewind size={isMobile ? 17 : 19} />
                   </button>
-                  <button className="play-btn" onClick={togglePlay} aria-label={isPlaying ? "Pause" : "Play"}>
-                    {isPlaying ? <Pause size={isMobile ? 19 : 22} fill="black" /> : <Play size={isMobile ? 19 : 22} fill="black" className="play-offset" />}
+                  <button
+                    className="w-[38px] h-[38px] sm:w-12 sm:h-12 rounded-full border-none cursor-pointer bg-white text-black flex items-center justify-center flex-shrink-0 transition-transform hover:scale-[1.08] hover:shadow-[0_0_0_6px_rgba(255,255,255,0.08)]"
+                    onClick={togglePlay}
+                    aria-label={isPlaying ? "Pause" : "Play"}
+                  >
+                    {isPlaying ? <Pause size={isMobile ? 19 : 22} fill="black" /> : <Play size={isMobile ? 19 : 22} fill="black" className="ml-0.5" />}
                   </button>
                   <button
-                    className="ctrl-btn"
+                    className="p-1.5 sm:p-2 rounded-lg bg-transparent border-none text-white/60 cursor-pointer transition-colors hover:bg-white/[0.09] hover:text-white flex items-center justify-center"
                     aria-label="Forward 10s"
                     onClick={() => {
                       videoRef.current.currentTime += 10;
@@ -418,9 +526,9 @@ const Theater = ({ member = [], webrtc }) => {
               )}
 
               {/* Movie volume control */}
-              <div className="movie-vol-group">
+              <div className="flex items-center gap-1">
                 <button
-                  className="ctrl-btn"
+                  className="p-1.5 sm:p-2 rounded-lg bg-transparent border-none text-white/60 cursor-pointer transition-colors hover:bg-white/[0.09] hover:text-white flex items-center justify-center"
                   aria-label="Toggle movie audio"
                   onClick={() => setMovieMuted((p) => !p)}
                 >
@@ -435,7 +543,7 @@ const Theater = ({ member = [], webrtc }) => {
                       setMovieVol(v);
                       if (v > 0) setMovieMuted(false);
                     }}
-                    className="movie-vol-slider"
+                    className="w-[50px] sm:w-20 h-[3px] cursor-pointer accent-white/70"
                     aria-label="Movie volume"
                   />
                 )}
@@ -443,11 +551,13 @@ const Theater = ({ member = [], webrtc }) => {
             </div>
 
             {/* Right: voice + util */}
-            <div className="controls-right">
+            <div className="flex items-center gap-1 sm:gap-2.5">
 
               {isInCall && (
                 <button
-                  className={`ctrl-btn mic-btn ${isMuted ? "danger" : ""}`}
+                  className={`p-1.5 sm:p-2 rounded-lg border border-white/[0.08] cursor-pointer transition-colors flex items-center justify-center ${
+                    isMuted ? "text-red-400 hover:bg-red-400/[0.12]" : "text-white/60 hover:bg-white/[0.09] hover:text-white"
+                  }`}
                   onClick={toggleMute}
                   aria-label={isMuted ? "Unmute mic" : "Mute mic"}
                 >
@@ -456,7 +566,11 @@ const Theater = ({ member = [], webrtc }) => {
               )}
 
               <button
-                className={`call-btn ${isInCall ? "in-call" : "join-call"}`}
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg border cursor-pointer text-[11px] sm:text-[13px] font-bold tracking-wide uppercase whitespace-nowrap transition-colors ${
+                  isInCall
+                    ? "bg-emerald-400/[0.12] border-emerald-400/25 text-emerald-400 hover:bg-red-400/[0.15] hover:border-red-400/25 hover:text-red-400"
+                    : "bg-indigo-500/[0.15] border-indigo-500/25 text-indigo-300 hover:bg-indigo-500/25"
+                }`}
                 onClick={isInCall ? leaveCall : handleJoinCall}
                 aria-label={isInCall ? "Leave voice call" : "Join voice call"}
               >
@@ -466,10 +580,10 @@ const Theater = ({ member = [], webrtc }) => {
                 }
               </button>
 
-              <div className="divider-v" />
+              <div className="w-px h-5.5 bg-white/[0.08] flex-shrink-0" />
 
               <button
-                className="ctrl-btn"
+                className="p-1.5 sm:p-2 rounded-lg bg-transparent border-none text-white/60 cursor-pointer transition-colors hover:bg-white/[0.09] hover:text-white flex items-center justify-center"
                 onClick={toggleFullscreen}
                 aria-label={isFullscreen ? "Exit fullscreen (F)" : "Enter fullscreen (F)"}
                 title={isFullscreen ? "Exit fullscreen [F]" : "Fullscreen [F]"}
@@ -477,369 +591,41 @@ const Theater = ({ member = [], webrtc }) => {
                 {isFullscreen ? <Minimize size={isMobile ? 16 : 18} /> : <Maximize size={isMobile ? 16 : 18} />}
               </button>
 
-              <div className="divider-v" />
+              <div className="w-px h-5.5 bg-white/[0.08] flex-shrink-0" />
 
-              <button className="leave-btn" onClick={leaveRoom} aria-label="Leave room">
+              <button
+                className="flex items-center gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-red-600/20 bg-red-600/[0.08] text-red-400 cursor-pointer text-[11px] sm:text-[13px] font-bold tracking-wide uppercase whitespace-nowrap transition-colors hover:bg-red-600/70 hover:text-white hover:border-transparent"
+                onClick={leaveRoom}
+                aria-label="Leave room"
+              >
                 <LogOut size={isMobile ? 15 : 17} />
                 {!isMobile && " Exit"}
               </button>
             </div>
           </div>
 
+          {/* Keyboard hints (desktop only) */}
           {!isMobile && (
-            <div className="kbd-hints">
-              <span><kbd>Space</kbd> play/pause</span>
-              <span><kbd>F</kbd> fullscreen</span>
-              <span><kbd>M</kbd> mute movie</span>
-              {isHost && <span><kbd>←</kbd><kbd>→</kbd> seek</span>}
+            <div className="flex items-center gap-3.5 pt-0.5 flex-wrap">
+              <span className="flex items-center gap-1 text-[10px] text-white/20">
+                <kbd className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-white/[0.07] border border-white/[0.12] font-mono text-[9px] text-white/35">Space</kbd> play/pause
+              </span>
+              <span className="flex items-center gap-1 text-[10px] text-white/20">
+                <kbd className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-white/[0.07] border border-white/[0.12] font-mono text-[9px] text-white/35">F</kbd> fullscreen
+              </span>
+              <span className="flex items-center gap-1 text-[10px] text-white/20">
+                <kbd className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-white/[0.07] border border-white/[0.12] font-mono text-[9px] text-white/35">M</kbd> mute movie
+              </span>
+              {isHost && (
+                <span className="flex items-center gap-1 text-[10px] text-white/20">
+                  <kbd className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-white/[0.07] border border-white/[0.12] font-mono text-[9px] text-white/35">←</kbd>
+                  <kbd className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-white/[0.07] border border-white/[0.12] font-mono text-[9px] text-white/35">→</kbd> seek
+                </span>
+              )}
             </div>
           )}
         </div>
       </div>
-
-      <style>{`
-        .theater-root {
-          position: fixed; inset: 0;
-          background: #000;
-          display: flex; align-items: center; justify-content: center;
-          color: #fff;
-          overflow: hidden;
-          font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
-          user-select: none;
-          -webkit-user-select: none;
-        }
-
-        .theater-video {
-          width: 100%; height: 100%;
-          object-fit: contain;
-          cursor: pointer;
-        }
-
-        /* ── top bar ── */
-        .theater-top {
-          position: absolute; top: 0; left: 0; right: 0;
-          padding: clamp(12px, 3vw, 24px);
-          display: flex; justify-content: space-between; align-items: flex-start;
-          gap: 12px;
-          background: linear-gradient(to bottom, rgba(0,0,0,.75) 0%, transparent 100%);
-          transition: opacity .4s ease, transform .4s ease;
-        }
-        .vis { opacity: 1; pointer-events: auto; transform: translateY(0); }
-        .hid { opacity: 0; pointer-events: none; }
-        .theater-top.hid { transform: translateY(-8px); }
-        .theater-bottom.hid { transform: translateY(8px); }
-
-        .top-left {
-          display: flex; flex-direction: column; gap: 6px;
-          min-width: 0;
-        }
-        .movie-title {
-          font-size: clamp(15px, 2.5vw, 22px);
-          font-weight: 600; letter-spacing: -.02em;
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-          max-width: 50vw;
-          color: rgba(255,255,255,.92);
-        }
-        .room-code-btn {
-          display: inline-flex; align-items: center; gap: 6px;
-          padding: 4px 10px; border-radius: 20px;
-          background: rgba(255,255,255,.06);
-          border: 1px solid rgba(255,255,255,.12);
-          cursor: pointer; color: inherit;
-          transition: background .15s;
-          width: fit-content;
-        }
-        .room-code-btn:hover { background: rgba(255,255,255,.12); }
-        .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; letter-spacing: .12em; color: rgba(255,255,255,.5); text-transform: uppercase; }
-        .icon-success { color: #34d399; }
-        .icon-muted   { color: rgba(255,255,255,.4); }
-
-        .top-right {
-          display: flex; align-items: center; gap: 8px;
-          background: rgba(0,0,0,.3);
-          backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-          padding: 6px 8px; border-radius: 16px;
-          border: 1px solid rgba(255,255,255,.07);
-          flex-shrink: 0;
-        }
-        .call-pill {
-          display: flex; align-items: center; gap: 5px;
-          padding: 3px 8px; border-radius: 20px;
-          background: rgba(52,211,153,.12); border: 1px solid rgba(52,211,153,.2);
-          font-size: 11px; color: #34d399; font-weight: 600;
-        }
-        .call-dot {
-          width: 6px; height: 6px; border-radius: 50%;
-          background: #34d399; animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-
-        .avatar-stack { display: flex; }
-        .avatar-more {
-          width: 30px; height: 30px; border-radius: 50%;
-          background: rgba(255,255,255,.1); border: 2px solid #000;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 11px; font-weight: 700; color: rgba(255,255,255,.6);
-          margin-left: -6px;
-        }
-
-        .icon-btn {
-          padding: 6px; border-radius: 10px; cursor: pointer;
-          background: transparent; border: none; color: rgba(255,255,255,.65);
-          transition: background .15s, color .15s;
-          display: flex; align-items: center; justify-content: center;
-        }
-        .icon-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
-        .icon-btn.active { background: rgba(255,255,255,.95); color: #000; }
-
-        /* ── sidebar ── */
-        .sidebar {
-          position: absolute; right: 0; top: 0; bottom: 0;
-          width: min(280px, 85vw);
-          background: rgba(10,10,14,.85);
-          backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-          border-left: 1px solid rgba(255,255,255,.07);
-          transition: transform .35s cubic-bezier(.4,0,.2,1);
-          transform: translateX(100%);
-          z-index: 50;
-        }
-        .sidebar-open { transform: translateX(0); }
-
-        .sidebar-inner {
-          display: flex; flex-direction: column; gap: 0;
-          height: 100%; padding: 20px 16px;
-          overflow: hidden;
-        }
-        .sidebar-section { display: flex; flex-direction: column; gap: 10px; }
-        .vol-section {
-          border-top: 1px solid rgba(255,255,255,.07);
-          padding-top: 14px; margin-top: 14px;
-        }
-        .sidebar-label {
-          display: flex; align-items: center; gap: 5px;
-          font-size: 10px; font-weight: 700; letter-spacing: .14em;
-          color: rgba(255,255,255,.35); text-transform: uppercase;
-          margin: 0;
-        }
-        .member-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; flex: 1; }
-        .member-list::-webkit-scrollbar { width: 3px; }
-        .member-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 4px; }
-        .member-row {
-          display: flex; align-items: center; gap: 9px;
-          padding: 5px 6px; border-radius: 8px;
-          transition: background .12s;
-        }
-        .member-row:hover { background: rgba(255,255,255,.04); }
-        .member-name { font-size: 13px; color: rgba(255,255,255,.8); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .member-badges { display: flex; align-items: center; gap: 4px; }
-        .badge-call {
-          width: 6px; height: 6px; border-radius: 50%;
-          background: #34d399;
-          box-shadow: 0 0 6px rgba(52,211,153,.6);
-        }
-        .badge-host {
-          width: 6px; height: 6px; border-radius: 50%;
-          background: #fbbf24;
-          box-shadow: 0 0 6px rgba(251,191,36,.5);
-        }
-
-        /* volume rows */
-        .vol-row { display: flex; flex-direction: column; gap: 5px; }
-        .vol-header { display: flex; align-items: center; justify-content: space-between; }
-        .vol-name { font-size: 12px; color: rgba(255,255,255,.65); max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .vol-mute-btn {
-          padding: 3px; border-radius: 6px; cursor: pointer;
-          background: transparent; border: none; color: rgba(255,255,255,.4);
-          transition: background .12s, color .12s; display: flex;
-        }
-        .vol-mute-btn.muted { color: #f87171; }
-        .vol-mute-btn:hover { background: rgba(255,255,255,.08); color: #fff; }
-        .vol-slider {
-          width: 100%; height: 3px;
-          accent-color: #818cf8;
-          cursor: pointer; border-radius: 4px;
-        }
-
-        /* ── mic toast ── */
-        .mic-toast {
-          position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
-          z-index: 200;
-          padding: 10px 18px; border-radius: 12px;
-          background: rgba(127,29,29,.85);
-          backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-          border: 1px solid rgba(248,113,113,.25);
-          font-size: 13px; color: #fca5a5;
-          white-space: nowrap;
-          animation: slideDown .3s ease;
-        }
-        @keyframes slideDown { from{transform:translateX(-50%) translateY(-8px);opacity:0} to{transform:translateX(-50%) translateY(0);opacity:1} }
-
-        /* ── pause overlay ── */
-        .pause-overlay {
-          position: absolute; inset: 0;
-          display: flex; align-items: center; justify-content: center;
-          pointer-events: auto; cursor: pointer;
-        }
-        .pause-icon-wrap {
-          width: 64px; height: 64px; border-radius: 50%;
-          background: rgba(0,0,0,.55);
-          backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-          border: 1px solid rgba(255,255,255,.15);
-          display: flex; align-items: center; justify-content: center;
-          animation: popIn .2s cubic-bezier(.34,1.56,.64,1);
-          pointer-events: none;
-        }
-        @keyframes popIn { from{opacity:0;transform:scale(.7)} to{opacity:1;transform:scale(1)} }
-
-        /* ── bottom controls ── */
-        .theater-bottom {
-          position: absolute; bottom: 0; left: 0; right: 0;
-          padding: clamp(8px, 2vw, 20px) clamp(8px, 3vw, 28px);
-          background: linear-gradient(to top, rgba(0,0,0,.85) 0%, transparent 100%);
-          transition: opacity .4s ease, transform .4s ease;
-        }
-
-        .controls-card {
-          width: 100%; max-width: 960px; margin: 0 auto;
-          background: rgba(12,12,18,.75);
-          backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
-          border: 1px solid rgba(255,255,255,.07);
-          border-radius: clamp(14px, 2vw, 24px);
-          padding: clamp(10px, 2vw, 16px) clamp(12px, 2.5vw, 22px);
-          display: flex; flex-direction: column; gap: 8px;
-        }
-
-        /* progress */
-        .progress-track {
-          position: relative; height: 3px; width: 100%;
-          background: rgba(255,255,255,.15);
-          border-radius: 999px; overflow: visible;
-          transition: height .15s;
-        }
-        .progress-track:hover { height: 5px; }
-        .progress-fill {
-          height: 100%; background: #e03131;
-          border-radius: 999px; position: relative;
-          transition: width .075s linear;
-        }
-        .progress-thumb {
-          position: absolute; right: -5px; top: 50%; transform: translateY(-50%);
-          width: 12px; height: 12px; border-radius: 50%;
-          background: #fff; box-shadow: 0 0 8px rgba(224,49,49,.5);
-          opacity: 0; transition: opacity .15s;
-        }
-        .progress-track:hover .progress-thumb { opacity: 1; }
-
-        .time-row {
-          display: flex; align-items: center; gap: 4px;
-          font-size: 11px; font-family: 'SF Mono','Fira Code',monospace;
-          color: rgba(255,255,255,.45);
-        }
-        .time-current { color: rgba(255,255,255,.85); font-weight: 600; }
-        .time-sep { color: rgba(255,255,255,.2); }
-        .time-total {}
-
-        .controls-row {
-          display: flex; align-items: center; justify-content: space-between; gap: 8px;
-          flex-wrap: wrap;
-        }
-        .controls-left, .controls-right {
-          display: flex; align-items: center; gap: clamp(4px, 1vw, 10px);
-        }
-
-        .ctrl-btn {
-          padding: clamp(6px, 1vw, 9px); border-radius: 10px;
-          background: transparent; border: none; color: rgba(255,255,255,.6);
-          cursor: pointer; transition: background .12s, color .12s;
-          display: flex; align-items: center; justify-content: center;
-        }
-        .ctrl-btn:hover { background: rgba(255,255,255,.09); color: #fff; }
-        .ctrl-btn.danger { color: #f87171; }
-        .ctrl-btn.danger:hover { background: rgba(248,113,113,.12); }
-        .ctrl-btn.mic-btn { border: 1px solid rgba(255,255,255,.08); border-radius: 10px; }
-
-        .play-btn {
-          width: clamp(38px, 5vw, 48px); height: clamp(38px, 5vw, 48px);
-          border-radius: 50%; border: none; cursor: pointer;
-          background: #fff; color: #000;
-          display: flex; align-items: center; justify-content: center;
-          transition: transform .12s, box-shadow .12s;
-          flex-shrink: 0;
-        }
-        .play-btn:hover { transform: scale(1.08); box-shadow: 0 0 0 6px rgba(255,255,255,.08); }
-        .play-offset { margin-left: 2px; }
-
-        /* movie volume */
-        .movie-vol-group { display: flex; align-items: center; gap: 4px; }
-        .movie-vol-slider {
-          width: clamp(50px, 7vw, 80px); height: 3px;
-          accent-color: rgba(255,255,255,.7);
-          cursor: pointer;
-        }
-
-        /* call button */
-        .call-btn {
-          display: flex; align-items: center; gap: 5px;
-          padding: clamp(6px, 1vw, 8px) clamp(10px, 1.5vw, 14px);
-          border-radius: 10px; border: none; cursor: pointer;
-          font-size: clamp(11px, 1.2vw, 13px); font-weight: 700;
-          letter-spacing: .05em; text-transform: uppercase;
-          transition: background .15s, color .15s;
-          white-space: nowrap;
-        }
-        .join-call {
-          background: rgba(99,102,241,.15); border: 1px solid rgba(99,102,241,.25);
-          color: #a5b4fc;
-        }
-        .join-call:hover { background: rgba(99,102,241,.25); }
-        .in-call {
-          background: rgba(52,211,153,.12); border: 1px solid rgba(52,211,153,.25);
-          color: #34d399;
-        }
-        .in-call:hover { background: rgba(248,113,113,.15); border-color: rgba(248,113,113,.25); color: #f87171; }
-
-        .leave-btn {
-          display: flex; align-items: center; gap: 5px;
-          padding: clamp(6px, 1vw, 8px) clamp(10px, 1.5vw, 16px);
-          border-radius: 10px; border: 1px solid rgba(224,49,49,.2);
-          background: rgba(224,49,49,.08); color: #f87171;
-          cursor: pointer; font-size: clamp(11px, 1.2vw, 13px); font-weight: 700;
-          letter-spacing: .05em; text-transform: uppercase;
-          transition: background .15s, color .15s;
-          white-space: nowrap;
-        }
-        .leave-btn:hover { background: rgba(224,49,49,.7); color: #fff; border-color: transparent; }
-
-        .divider-v {
-          width: 1px; height: 22px;
-          background: rgba(255,255,255,.08); flex-shrink: 0;
-        }
-
-        /* keyboard hints */
-        .kbd-hints {
-          display: flex; align-items: center; gap: 14px;
-          padding-top: 2px;
-          flex-wrap: wrap;
-        }
-        .kbd-hints span {
-          display: flex; align-items: center; gap: 4px;
-          font-size: 10px; color: rgba(255,255,255,.22);
-        }
-        kbd {
-          display: inline-flex; align-items: center; justify-content: center;
-          padding: 1px 5px; border-radius: 4px;
-          background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
-          font-family: 'SF Mono','Fira Code',monospace;
-          font-size: 9px; color: rgba(255,255,255,.35);
-        }
-
-        /* mobile adjustments */
-        @media (max-width: 639px) {
-          .controls-left, .controls-right { gap: 4px; }
-          .controls-card { padding: 10px 12px; gap: 6px; }
-          .sidebar { width: 88vw; }
-        }
-      `}</style>
     </div>
   );
 };
