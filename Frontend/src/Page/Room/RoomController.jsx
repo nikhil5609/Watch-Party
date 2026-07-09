@@ -5,8 +5,7 @@ import { socket } from "../../socket";
 import { useNavigate, useParams } from "react-router-dom";
 import { joinRoom, setRoom } from "../../Store/room.slice";
 import { useGetLiveUser } from "../../Hooks/getLiveUser";
-// import { useWebRTC } from "../../Hooks/useWebRTC";
-import { useWebRTC } from "../../Hooks/Usewebrtcrnnoise"
+import { useWebRTC } from "../../Hooks/useAudiocall"
 import { UserPlus, UserMinus, X } from "lucide-react";
 
 const RoomController = () => {

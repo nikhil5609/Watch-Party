@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
-    exclude: ['@sapphi-red/web-noise-suppressor']
+    exclude: ['@sapphi-red/web-noise-suppressor', '@ffmpeg/ffmpeg', '@ffmpeg/util']
   }
 })
+

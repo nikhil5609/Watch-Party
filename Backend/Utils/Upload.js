@@ -5,18 +5,18 @@ const ffmpeg = require('fluent-ffmpeg');
 ffmpeg.setFfmpegPath(ffmpegStatic);
 const { uploadToTigrisStorage, generatePresignedUrl } = require('./tigris');
 
-const processVideo = (inputPath, outputPath) => {
-  return new Promise((resolve, reject) => {
-    ffmpeg(inputPath)
-      .outputOptions('-movflags +faststart')
-      .videoCodec('copy')
-      .audioCodec('copy')
-      .outputOptions('-preset ultrafast')
-      .on('end', () => resolve(outputPath))
-      .on('error', (err) => reject(err))
-      .save(outputPath);
-  });
-};
+// const processVideo = (inputPath, outputPath) => {
+//   return new Promise((resolve, reject) => {
+//     ffmpeg(inputPath)
+//       .outputOptions('-movflags +faststart')
+//       .videoCodec('copy')
+//       .audioCodec('copy')
+//       .outputOptions('-preset ultrafast')
+//       .on('end', () => resolve(outputPath))
+//       .on('error', (err) => reject(err))
+//       .save(outputPath);
+//   });
+// };
 
 const deleteFile = (filePath) => {
   if (fs.existsSync(filePath)) {
@@ -30,14 +30,14 @@ const deleteFile = (filePath) => {
 const uploadVideo = async (filePath) => {
   const fileName = `${Date.now()}.mp4`;
   const videoKey = fileName;
-  const outputPath = path.join(path.dirname(filePath), `processed-${fileName}`);
+  const outputPath = filePath
 
   try {
     const stats = fs.statSync(filePath);
     console.log("Original size:", (stats.size / (1024 * 1024)).toFixed(2), "MB");
 
-    console.log("Optimizing for streaming...");
-    await processVideo(filePath, outputPath);
+    // console.log("Optimizing for streaming...");
+    // await processVideo(filePath, outputPath);
 
     console.log("Uploading to Tigris...");
     await uploadToTigrisStorage(outputPath, fileName);

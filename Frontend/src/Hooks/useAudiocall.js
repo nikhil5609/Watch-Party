@@ -1,93 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { socket } from "../socket";
-import { SpeexWorkletNode, loadSpeex } from '@sapphi-red/web-noise-suppressor'
-import speexWorkletPath from '@sapphi-red/web-noise-suppressor/speexWorklet.js?url'
-import speexWasmPath from '@sapphi-red/web-noise-suppressor/speex.wasm?url'
-
-// ─── ICE config ───────────────────────────────────────────────────────────────
-const buildIceServers = () => {
-  const servers = [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-    { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:stun.relay.metered.ca:80" },
-    {
-      urls: "turn:global.relay.metered.ca:80",
-      username: "f5c241b67512e7a3754b355f",
-      credential: "si5pp6D8aRyqd0fa",
-    },
-    {
-      urls: "turn:global.relay.metered.ca:80?transport=tcp",
-      username: "f5c241b67512e7a3754b355f",
-      credential: "si5pp6D8aRyqd0fa",
-    },
-    {
-      urls: "turn:global.relay.metered.ca:443",
-      username: "f5c241b67512e7a3754b355f",
-      credential: "si5pp6D8aRyqd0fa",
-    },
-    {
-      urls: "turns:global.relay.metered.ca:443?transport=tcp",
-      username: "f5c241b67512e7a3754b355f",
-      credential: "si5pp6D8aRyqd0fa",
-    },
-  ];
-  return { iceServers: servers };
-};
-
-// ─── SDP Audio Munger ────────────────────────────────────────────────────────
-// Modifies Session Description Protocol to maximize Opus codec performance
-const optimizeAudioSDP = (sdp) => {
-  return sdp.replace(/a=fmtp:(\d+) (.*)/g, (match, payloadType, existingParams) => {
-    if (match.includes("opus")) {
-      // maxaveragebitrate=51200 -> Studio-quality voice profile
-      // stereo=0 & sprop-stereo=0 -> Optimization for clean single-mic streams
-      // usedtx=1 -> Saves massive peer bandwidth by not transmitting absolute silence
-      return `a=fmtp:${payloadType} maxaveragebitrate=51200;stereo=0;sprop-stereo=0;usedtx=1;cbr=0`;
-    }
-    return match;
-  });
-};
-
-// ─── Lightweight DSP Processor ──────────────────────────────────────────────
-const processMicStream = async (rawStream) => {
-  try {
-    const ctx = new AudioContext({ sampleRate: 48000 })
-    if (ctx.state === 'suspended') await ctx.resume()
-
-    // Speex wasm load karo
-    const speexWasmBinary = await loadSpeex({ url: speexWasmPath })
-    await ctx.audioWorklet.addModule(speexWorkletPath)
-
-    const source = ctx.createMediaStreamSource(rawStream)
-
-    const highPass = ctx.createBiquadFilter()
-    highPass.type = 'highpass'
-    highPass.frequency.value = 150
-
-    // Speex AI denoiser: fan/cooler/air noise yahan remove hogi
-    const speex = new SpeexWorkletNode(ctx, {
-      wasmBinary: speexWasmBinary,
-      maxChannels: 1,
-    })
-
-    const compressor = ctx.createDynamicsCompressor()
-    compressor.threshold.value = -24
-    compressor.knee.value = 10
-    compressor.ratio.value = 2
-    compressor.attack.value = 0.005
-    compressor.release.value = 0.35
-
-    const dest = ctx.createMediaStreamDestination()
-
-    source.connect(highPass).connect(speex).connect(compressor).connect(dest)
-
-    return { processedStream: dest.stream, audioCtx: ctx }
-  } catch (e) {
-    console.warn('[WebRTC] Fallback to raw stream:', e)
-    return { processedStream: rawStream, audioCtx: null }
-  }
-}
+import { buildIceServers } from "../Utils/iceConfig";
+import { optimizeAudioSDP } from "../Utils/sdpUtils";
+import { processMicStream } from "../Utils/audioProccess";
 
 export const useWebRTC = (roomId) => {
   const [isInCall, setIsInCall] = useState(false);
@@ -98,6 +13,7 @@ export const useWebRTC = (roomId) => {
   const rawStreamRef = useRef(null);      // Stores real mic hardware track
   const localStreamRef = useRef(null);    // Stores enhanced audio track
   const micCtxRef = useRef(null);         // Controls AudioContext instance
+  const rnnoiseNodeRef = useRef(null);    // RNNoise worklet node (needs explicit .destroy())
   const peersRef = useRef({});            // socketId → RTCPeerConnection
   const audioElsRef = useRef({});         // socketId → HTMLAudioElement
   const myInfoRef = useRef({});           // { userId, username }
@@ -187,10 +103,10 @@ export const useWebRTC = (roomId) => {
           offerToReceiveAudio: true,
           voiceActivityDetection: true,
         });
-        
+
         offer.sdp = optimizeAudioSDP(offer.sdp);
         await pc.setLocalDescription(offer);
-        
+
         socket.emit("webrtc-offer", {
           to: socketId,
           offer,
@@ -213,10 +129,10 @@ export const useWebRTC = (roomId) => {
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await pc.createAnswer();
-        
+
         answer.sdp = optimizeAudioSDP(answer.sdp);
         await pc.setLocalDescription(answer);
-        
+
         socket.emit("webrtc-answer", {
           to: from,
           answer,
@@ -279,16 +195,17 @@ export const useWebRTC = (roomId) => {
         video: false,
       });
 
-      const { processedStream, audioCtx } = await processMicStream(rawStream);
-      
+      const { processedStream, audioCtx, rnnoiseNode } = await processMicStream(rawStream);
+
       rawStreamRef.current = rawStream;
       localStreamRef.current = processedStream;
       micCtxRef.current = audioCtx;
+      rnnoiseNodeRef.current = rnnoiseNode;
 
       myInfoRef.current = { userId, username };
       isInCallRef.current = true;
       setIsInCall(true);
-      
+
       socket.emit("webrtc-join-call", { roomId, userId, username });
     },
     [roomId]
@@ -299,7 +216,15 @@ export const useWebRTC = (roomId) => {
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     rawStreamRef.current = null;
     localStreamRef.current = null;
-    
+
+    // RnnoiseWorkletNode holds WASM-side memory that needs explicit cleanup,
+    // unlike SpeexWorkletNode this matters more since RNNoise's internal
+    // state buffers are larger — always destroy() before closing the context.
+    if (rnnoiseNodeRef.current) {
+      rnnoiseNodeRef.current.destroy();
+      rnnoiseNodeRef.current = null;
+    }
+
     if (micCtxRef.current) {
       micCtxRef.current.close().catch(() => {});
       micCtxRef.current = null;
@@ -333,6 +258,7 @@ export const useWebRTC = (roomId) => {
     return () => {
       rawStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      if (rnnoiseNodeRef.current) rnnoiseNodeRef.current.destroy();
       if (micCtxRef.current) micCtxRef.current.close().catch(() => {});
       Object.values(peersRef.current).forEach((pc) => pc.close());
     };
